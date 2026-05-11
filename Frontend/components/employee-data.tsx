@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, Users, TrendingUp, FileText, CheckCircle, AlertCircle, LayoutDashboard } from "lucide-react";
+import { ArrowLeft, Users, TrendingUp, FileText, CheckCircle, AlertCircle } from "lucide-react";
 import type { CyberComplaint } from "@/lib/store";
 
 interface EmployeeDataProps {
@@ -43,8 +43,8 @@ export function EmployeeData({
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-              <LayoutDashboard className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center overflow-hidden">
+              <img src="/Logo.jpg" alt="Logo" className="w-full h-full object-cover" />
             </div>
             <span className="text-xl font-bold">CYBER SYSTEM</span>
           </div>

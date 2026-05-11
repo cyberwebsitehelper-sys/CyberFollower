@@ -8,7 +8,6 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: 'Cyber Complaint Management System',
   description: 'Professional cyber complaint management and tracking system',
-  generator: 'v0.app',
   icons: {
     icon: [
       {

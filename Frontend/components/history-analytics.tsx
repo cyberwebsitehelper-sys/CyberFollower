@@ -11,7 +11,6 @@ import {
   CheckCircle,
   DollarSign,
   BarChart3,
-  LayoutDashboard,
 } from "lucide-react";
 import type { CyberComplaint, AdvEntry, CyberEntry, TimeFilter } from "@/lib/store";
 import { filterByTime } from "@/lib/store";
@@ -73,8 +72,8 @@ export function HistoryAnalytics({
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-              <LayoutDashboard className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center overflow-hidden">
+              <img src="/Logo.jpg" alt="Logo" className="w-full h-full object-cover" />
             </div>
             <span className="text-xl font-bold">CYBER SYSTEM</span>
           </div>
