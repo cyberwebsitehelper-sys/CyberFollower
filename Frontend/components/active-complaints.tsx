@@ -71,11 +71,11 @@ export function ActiveComplaints({
 
   const getRowId = (complaint: any): string => {
     if (!complaint) return "";
-    const id = complaint.id || complaint._id;
+    const id = complaint.id ?? complaint._id ?? complaint.pk;
     if (typeof id === 'object' && id !== null) {
-      return String(id.$oid || JSON.stringify(id));
+      return String(id.$oid || id.id || JSON.stringify(id)).trim();
     }
-    return String(id || "");
+    return String(id || "").trim();
   };
 
   const handleInputChange = (field: string, value: string | number) => {
@@ -523,7 +523,7 @@ export function ActiveComplaints({
                             variant="ghost"
                             size="icon"
                             onClick={() => handleCompleteClick(complaint)}
-                            className={`h-8 w-8 ${complaint.noc_file ? 'text-green-500 hover:bg-green-50' : 'text-gray-300 hover:bg-gray-100'}`}
+                            className="h-8 w-8 text-green-500 hover:bg-green-50"
                           >
                             <Check className="w-4 h-4" />
                           </Button>
@@ -630,9 +630,9 @@ export function ActiveComplaints({
             <DialogTitle className="text-xl font-bold text-white mb-1">
               Verify Action
             </DialogTitle>
-            <p className="text-white/60 text-xs font-medium">
+            <DialogDescription className="text-white/60 text-xs font-medium">
               Please enter your employee password to continue
-            </p>
+            </DialogDescription>
           </div>
           <div className="p-6 space-y-4">
             <Input

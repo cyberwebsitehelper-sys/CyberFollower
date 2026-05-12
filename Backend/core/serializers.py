@@ -1,4 +1,5 @@
 from decimal import Decimal
+import os
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from .models import Employee, CyberComplaint, AdvFeeEntry, CyberFeeEntry
@@ -60,16 +61,36 @@ class CyberComplaintSerializer(serializers.ModelSerializer):
     password_confirm = serializers.CharField(write_only=True, required=False, allow_blank=True)
     txn_amount = SafeDecimalField(max_digits=14, decimal_places=2, coerce_to_string=False)
     dispute_amount = SafeDecimalField(max_digits=14, decimal_places=2, coerce_to_string=False)
+    noc_file_url = serializers.SerializerMethodField(read_only=True)
+    noc_file_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = CyberComplaint
         fields = [
             "id", "bank_name", "ack_number", "ifsc_code", "state_name", "district", "layer",
             "txn_amount", "dispute_amount", "utr_number", "police_station", "vendor_name",
-            "noc_file", "is_complete", "created_at", "completed_at", "employee",
+            "noc_file", "noc_file_url", "noc_file_name", "is_complete", "created_at", "completed_at", "employee",
             "password_confirm",
         ]
         read_only_fields = ["is_complete", "created_at", "completed_at", "employee"]
+
+    def get_noc_file_url(self, obj):
+        file_obj = getattr(obj, "noc_file", None)
+        if not file_obj:
+            return None
+        try:
+            return file_obj.url
+        except Exception:
+            return str(file_obj)
+
+    def get_noc_file_name(self, obj):
+        file_obj = getattr(obj, "noc_file", None)
+        if not file_obj:
+            return None
+        file_name = getattr(file_obj, "name", "")
+        if not file_name:
+            return None
+        return os.path.basename(file_name)
 
     def validate_txn_amount(self, v):
         if v <= 0:

@@ -95,28 +95,41 @@ export default function Home() {
       toast.success("Complaint added successfully");
     } catch (error: any) {
       console.error("Add complaint error:", error);
-      toast.error(`Failed to add: ${error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error"}`);
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error";
+      toast.error(`Failed to add: ${message}`);
+      throw new Error(message);
     }
   };
 
   const handleUpdateComplaint = async (id: string, formData: FormData) => {
     try {
-      // Automatically close the complaint if an NOC file was uploaded
       const nocFile = formData.get("noc_file");
-      if (nocFile && typeof nocFile !== 'string' && nocFile.size > 0) {
-        formData.append("is_complete", "true");
+      const hasNocFile = !!(nocFile && typeof nocFile !== 'string' && nocFile.size > 0);
+
+      if (hasNocFile) {
+        const nonFileFormData = new FormData();
+        formData.forEach((value, key) => {
+          if (key === "noc_file" || key === "is_complete") return;
+          nonFileFormData.append(key, value);
+        });
+
+        await apiService.updateComplaint(id, nonFileFormData);
+        await apiService.uploadNoc(id, formData);
+      } else {
+        await apiService.updateComplaint(id, formData);
       }
 
-      await apiService.updateComplaint(id, formData);
       refreshData();
-      if (formData.has("is_complete")) {
+      if (hasNocFile) {
         toast.success("NOC file uploaded: Complaint moved to Closed");
       } else {
         toast.success("Complaint updated successfully");
       }
     } catch (error: any) {
       console.error("Update complaint error:", error);
-      toast.error(`Failed to update: ${error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error"}`);
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error";
+      toast.error(`Failed to update: ${message}`);
+      throw new Error(message);
     }
   };
 
@@ -127,7 +140,9 @@ export default function Home() {
       toast.success("Complaint closed successfully");
     } catch (error: any) {
       console.error("Close complaint error:", error);
-      toast.error(`Failed to close: ${error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error"}`);
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error";
+      toast.error(`Failed to close: ${message}`);
+      throw new Error(message);
     }
   };
 
@@ -138,7 +153,14 @@ export default function Home() {
       toast.success("Complaint deleted");
     } catch (error: any) {
       console.error("Delete complaint error:", error);
-      toast.error(`Failed to delete: ${error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error"}`);
+      const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error";
+      if (String(message).toLowerCase().includes("not found")) {
+        await refreshData();
+        toast.info("Complaint was already deleted");
+        return;
+      }
+      toast.error(`Failed to delete: ${message}`);
+      throw new Error(message);
     }
   };
 

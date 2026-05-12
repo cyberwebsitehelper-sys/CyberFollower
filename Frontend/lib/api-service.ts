@@ -18,6 +18,8 @@ export interface CyberComplaint {
   police_station: string;
   vendor_name: string;
   noc_file: string | null;
+  noc_file_url?: string | null;
+  noc_file_name?: string | null;
   is_complete: boolean;
   created_at: string;
   completed_at: string | null;
@@ -51,13 +53,16 @@ export interface DashboardStats {
 const resolveFileUrl = (value: string | null): string | null => {
   if (!value) return null;
   if (/^https?:\/\//i.test(value)) return value;
-  const normalizedPath = value.startsWith('/') ? value : `/${value}`;
+  let normalizedPath = value.startsWith('/') ? value : `/${value}`;
+  if (normalizedPath.startsWith('/noc/')) {
+    normalizedPath = `/media${normalizedPath}`;
+  }
   return `${API_BASE_URL}${normalizedPath}`;
 };
 
 const normalizeComplaint = (item: CyberComplaint): CyberComplaint => ({
   ...item,
-  noc_file: resolveFileUrl(item.noc_file),
+  noc_file: resolveFileUrl(item.noc_file || item.noc_file_url || null),
 });
 
 export const apiService = {
@@ -89,6 +94,7 @@ export const apiService = {
   addComplaint: (formData: FormData) => api.post('/api/complaints/', formData),
 
   updateComplaint: (id: string, formData: FormData) => api.patch(`/api/complaints/${id}/`, formData),
+  uploadNoc: (id: string, formData: FormData) => api.post(`/api/complaints/${id}/upload-noc/`, formData),
 
   closeComplaint: (id: string, passwordConfirm: string) =>
     api.post(`/api/complaints/${id}/close/`, { password_confirm: passwordConfirm }),
