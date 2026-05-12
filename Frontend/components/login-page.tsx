@@ -9,9 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 
 interface LoginPageProps {
   onLogin: (phoneNumber: string) => void;
+  onLoginSubmit?: (phoneNumber: string, passwordConfirm: string) => Promise<void>;
 }
 
-export function LoginPage({ onLogin }: LoginPageProps) {
+export function LoginPage({ onLogin, onLoginSubmit }: LoginPageProps) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -32,9 +33,19 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     }
 
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    setIsLoading(false);
-    onLogin(phoneNumber);
+    try {
+      if (onLoginSubmit) {
+        await onLoginSubmit(phoneNumber, password);
+      } else {
+        // Fallback for mock
+        await new Promise(resolve => setTimeout(resolve, 800));
+        onLogin(phoneNumber);
+      }
+    } catch (err: any) {
+      setError(err.message || "Login failed");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

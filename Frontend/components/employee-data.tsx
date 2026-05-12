@@ -1,8 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, Users, TrendingUp, FileText, CheckCircle, AlertCircle } from "lucide-react";
-import type { CyberComplaint } from "@/lib/store";
+import { ArrowLeft, Users, TrendingUp, FileText, CheckCircle, AlertCircle, LayoutDashboard } from "lucide-react";
+import type { CyberComplaint } from "@/lib/api-service";
 
 interface EmployeeDataProps {
   activeComplaints: CyberComplaint[];
@@ -16,16 +16,17 @@ export function EmployeeData({
   onBack,
 }: EmployeeDataProps) {
   const allComplaints = [...activeComplaints, ...closedComplaints];
-  const totalTxnAmount = allComplaints.reduce((sum, c) => sum + c.txnAmount, 0);
-  const totalDisputeAmount = allComplaints.reduce((sum, c) => sum + c.disputeAmount, 0);
+  const totalTxnAmount = allComplaints.reduce((sum, c) => sum + Number(c.txn_amount), 0);
+  const totalDisputeAmount = allComplaints.reduce((sum, c) => sum + Number(c.dispute_amount), 0);
 
-  // Group by employee
+  // Group by employee - In a real app with IDs, we might want names,
+  // but for now we group by the ID provided in the complaint.
   const employeeStats = allComplaints.reduce((acc, complaint) => {
-    const empId = complaint.employeeId;
+    const empId = complaint.employee;
     if (!acc[empId]) {
       acc[empId] = { active: 0, closed: 0, total: 0 };
     }
-    if (complaint.isComplete) {
+    if (complaint.is_complete) {
       acc[empId].closed++;
     } else {
       acc[empId].active++;
@@ -43,8 +44,8 @@ export function EmployeeData({
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center overflow-hidden">
-              <img src="/Logo.jpg" alt="Logo" className="w-full h-full object-cover" />
+            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+              <LayoutDashboard className="w-6 h-6 text-white" />
             </div>
             <span className="text-xl font-bold">CYBER SYSTEM</span>
           </div>
@@ -149,7 +150,7 @@ export function EmployeeData({
                       <Users className="w-5 h-5 text-[#e74c3c]" />
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-800">Employee {empId}</p>
+                      <p className="font-semibold text-gray-800">Employee ID: {empId}</p>
                       <p className="text-xs text-gray-500">
                         {stats.total} total entries
                       </p>

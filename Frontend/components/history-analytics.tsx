@@ -11,9 +11,33 @@ import {
   CheckCircle,
   DollarSign,
   BarChart3,
+  LayoutDashboard,
 } from "lucide-react";
-import type { CyberComplaint, AdvEntry, CyberEntry, TimeFilter } from "@/lib/store";
-import { filterByTime } from "@/lib/store";
+import type { CyberComplaint, AdvEntry, CyberEntry } from "@/lib/api-service";
+
+export type TimeFilter = 'daily' | 'weekly' | 'monthly' | 'yearly';
+
+export function filterByTime<T extends { created_at: string }>(items: T[], filter: TimeFilter): T[] {
+  const now = new Date();
+  const startDate = new Date();
+
+  switch (filter) {
+    case 'daily':
+      startDate.setHours(0, 0, 0, 0);
+      break;
+    case 'weekly':
+      startDate.setDate(now.getDate() - 7);
+      break;
+    case 'monthly':
+      startDate.setMonth(now.getMonth() - 1);
+      break;
+    case 'yearly':
+      startDate.setFullYear(now.getFullYear() - 1);
+      break;
+  }
+
+  return items.filter(item => new Date(item.created_at) >= startDate);
+}
 
 interface HistoryAnalyticsProps {
   activeComplaints: CyberComplaint[];
@@ -72,8 +96,8 @@ export function HistoryAnalytics({
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center overflow-hidden">
-              <img src="/Logo.jpg" alt="Logo" className="w-full h-full object-cover" />
+            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+              <LayoutDashboard className="w-6 h-6 text-white" />
             </div>
             <span className="text-xl font-bold">CYBER SYSTEM</span>
           </div>
@@ -183,7 +207,7 @@ export function HistoryAnalytics({
                 <div>
                   <p className="text-sm text-gray-500">ADV Fees</p>
                   <p className="text-xl font-bold text-blue-600">
-                    ₹{filteredAdv.reduce((sum, e) => sum + e.advFees, 0).toLocaleString()}
+                    ₹{filteredAdv.reduce((sum, e) => sum + Number(e.fees), 0).toLocaleString()}
                   </p>
                 </div>
                 <div className="text-right">
@@ -196,7 +220,7 @@ export function HistoryAnalytics({
                 <div>
                   <p className="text-sm text-gray-500">Cyber Fees</p>
                   <p className="text-xl font-bold text-[#e74c3c]">
-                    ₹{filteredCyber.reduce((sum, e) => sum + e.cyberFees, 0).toLocaleString()}
+                    ₹{filteredCyber.reduce((sum, e) => sum + Number(e.fees), 0).toLocaleString()}
                   </p>
                 </div>
                 <div className="text-right">
@@ -210,8 +234,8 @@ export function HistoryAnalytics({
                   <p className="text-sm font-medium text-gray-700">Total Collections</p>
                   <p className="text-xl font-bold text-green-600">
                     ₹{(
-                      filteredAdv.reduce((sum, e) => sum + e.advFees, 0) +
-                      filteredCyber.reduce((sum, e) => sum + e.cyberFees, 0)
+                      filteredAdv.reduce((sum, e) => sum + Number(e.fees), 0) +
+                      filteredCyber.reduce((sum, e) => sum + Number(e.fees), 0)
                     ).toLocaleString()}
                   </p>
                 </div>
@@ -237,7 +261,7 @@ export function HistoryAnalytics({
                   <p className="text-sm text-gray-500">Transaction Amount</p>
                   <p className="text-xl font-bold text-gray-800">
                     ₹{[...filteredActive, ...filteredClosed]
-                      .reduce((sum, c) => sum + c.txnAmount, 0)
+                      .reduce((sum, c) => sum + Number(c.txn_amount), 0)
                       .toLocaleString()}
                   </p>
                 </div>
@@ -248,7 +272,7 @@ export function HistoryAnalytics({
                   <p className="text-sm text-gray-500">Dispute Amount</p>
                   <p className="text-xl font-bold text-gray-800">
                     ₹{[...filteredActive, ...filteredClosed]
-                      .reduce((sum, c) => sum + c.disputeAmount, 0)
+                      .reduce((sum, c) => sum + Number(c.dispute_amount), 0)
                       .toLocaleString()}
                   </p>
                 </div>
@@ -294,7 +318,7 @@ export function HistoryAnalytics({
           <div className="p-6">
             <div className="space-y-3 max-h-[400px] overflow-auto">
               {[...filteredActive, ...filteredClosed]
-                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                 .slice(0, 10)
                 .map((complaint, index) => (
                   <motion.div
@@ -307,12 +331,12 @@ export function HistoryAnalytics({
                     <div className="flex items-center gap-3">
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          complaint.isComplete
+                          complaint.is_complete
                             ? "bg-green-100 text-green-600"
                             : "bg-yellow-100 text-yellow-600"
                         }`}
                       >
-                        {complaint.isComplete ? (
+                        {complaint.is_complete ? (
                           <CheckCircle className="w-4 h-4" />
                         ) : (
                           <AlertCircle className="w-4 h-4" />
@@ -320,19 +344,19 @@ export function HistoryAnalytics({
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-800">
-                          {complaint.bankName}
+                          {complaint.bank_name}
                         </p>
                         <p className="text-xs text-gray-500">
-                          ACK: {complaint.ackNumber}
+                          ACK: {complaint.ack_number}
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-semibold text-gray-800">
-                        ₹{complaint.txnAmount.toLocaleString()}
+                        ₹{Number(complaint.txn_amount).toLocaleString()}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {new Date(complaint.createdAt).toLocaleDateString()}
+                        {new Date(complaint.created_at).toLocaleDateString()}
                       </p>
                     </div>
                   </motion.div>
@@ -369,13 +393,13 @@ export function HistoryAnalytics({
               </div>
               <div className="text-center p-4 bg-white rounded-lg" style={{ borderLeft: "4px solid #9b59b6" }}>
                 <p className="text-3xl font-bold text-purple-600">
-                  ₹{advEntries.reduce((sum, e) => sum + e.advFees, 0).toLocaleString()}
+                  ₹{advEntries.reduce((sum, e) => sum + Number(e.fees), 0).toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-500">Total ADV Fees</p>
               </div>
               <div className="text-center p-4 bg-white rounded-lg" style={{ borderLeft: "4px solid #e74c3c" }}>
                 <p className="text-3xl font-bold text-[#e74c3c]">
-                  ₹{cyberEntries.reduce((sum, e) => sum + e.cyberFees, 0).toLocaleString()}
+                  ₹{cyberEntries.reduce((sum, e) => sum + Number(e.fees), 0).toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-500">Total Cyber Fees</p>
               </div>

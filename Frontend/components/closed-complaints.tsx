@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, CheckCircle, Check, FileText, LayoutDashboard } from "lucide-react";
-import type { CyberComplaint } from "@/lib/store";
+import type { CyberComplaint } from "@/lib/api-service";
 
 interface ClosedComplaintsProps {
   complaints: CyberComplaint[];
@@ -67,19 +67,19 @@ export function ClosedComplaints({ complaints, onBack }: ClosedComplaintsProps) 
           <div className="bg-white rounded-lg shadow-sm p-4" style={{ borderLeft: "4px solid #3498db" }}>
             <p className="text-xs text-gray-500 mb-1">Total TXN Amount</p>
             <p className="text-2xl font-bold text-gray-800">
-              ₹{complaints.reduce((sum, c) => sum + c.txnAmount, 0).toLocaleString()}
+              ₹{complaints.reduce((sum, c) => sum + Number(c.txn_amount), 0).toLocaleString()}
             </p>
           </div>
           <div className="bg-white rounded-lg shadow-sm p-4" style={{ borderLeft: "4px solid #9b59b6" }}>
             <p className="text-xs text-gray-500 mb-1">Total Dispute Amount</p>
             <p className="text-2xl font-bold text-gray-800">
-              ₹{complaints.reduce((sum, c) => sum + c.disputeAmount, 0).toLocaleString()}
+              ₹{complaints.reduce((sum, c) => sum + Number(c.dispute_amount), 0).toLocaleString()}
             </p>
           </div>
           <div className="bg-white rounded-lg shadow-sm p-4" style={{ borderLeft: "4px solid #e74c3c" }}>
             <p className="text-xs text-gray-500 mb-1">With NOC File</p>
             <p className="text-2xl font-bold text-[#e74c3c]">
-              {complaints.filter((c) => c.nocFileName).length}
+              {complaints.filter((c) => c.noc_file).length}
             </p>
           </div>
         </motion.div>
@@ -121,9 +121,11 @@ export function ClosedComplaints({ complaints, onBack }: ClosedComplaintsProps) 
               </thead>
               <tbody className="divide-y divide-gray-100">
                 <AnimatePresence>
-                  {complaints.map((complaint, index) => (
+                  {complaints.map((complaint, index) => {
+                    const rowId = complaint.id || (complaint as any)._id;
+                    return (
                     <motion.tr
-                      key={complaint.id}
+                      key={rowId}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 20 }}
@@ -131,52 +133,57 @@ export function ClosedComplaints({ complaints, onBack }: ClosedComplaintsProps) 
                       className="hover:bg-gray-50 transition-colors"
                     >
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
-                        {complaint.bankName}
+                        {complaint.bank_name}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap font-mono">
-                        {complaint.ackNumber}
+                        {complaint.ack_number}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap font-mono">
-                        {complaint.ifscCode}
+                        {complaint.ifsc_code}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
-                        {complaint.stateName}
+                        {complaint.state_name}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
-                        {complaint.dist}
+                        {complaint.district}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
                         {complaint.layer}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
-                        ₹{complaint.txnAmount.toLocaleString()}
+                        ₹{Number(complaint.txn_amount).toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
-                        ₹{complaint.disputeAmount.toLocaleString()}
+                        ₹{Number(complaint.dispute_amount).toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap font-mono">
-                        {complaint.utrNumber}
+                        {complaint.utr_number}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
-                        {complaint.policeStation}
+                        {complaint.police_station}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
-                        {complaint.vendorName}
+                        {complaint.vendor_name}
                       </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        <span className="text-green-600 flex items-center gap-1">
-                          <Check className="w-3 h-3" />
-                          <FileText className="w-3 h-3" />
-                          {complaint.nocFileName}
-                        </span>
+                        {complaint.noc_file ? (
+                          <a href={complaint.noc_file} target="_blank" rel="noopener noreferrer" className="text-green-600 flex items-center gap-1 hover:underline">
+                            <Check className="w-3 h-3" />
+                            <FileText className="w-3 h-3" />
+                            View NOC
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">None</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
-                        {complaint.completedAt
-                          ? new Date(complaint.completedAt).toLocaleDateString()
+                        {complaint.completed_at
+                          ? new Date(complaint.completed_at).toLocaleDateString()
                           : "-"}
                       </td>
                     </motion.tr>
-                  ))}
+                    );
+                  })}
                 </AnimatePresence>
               </tbody>
             </table>

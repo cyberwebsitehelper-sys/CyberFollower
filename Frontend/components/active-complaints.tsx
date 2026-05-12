@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -23,33 +23,30 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import type { CyberComplaint } from "@/lib/store";
+import type { CyberComplaint } from "@/lib/api-service";
 
 interface ActiveComplaintsProps {
   complaints: CyberComplaint[];
   onBack: () => void;
-  onAdd: (complaint: Omit<CyberComplaint, "id" | "createdAt" | "completedAt">) => void;
-  onUpdate: (id: string, updates: Partial<CyberComplaint>) => void;
-  onMoveToClose: (id: string) => void;
-  onDelete: (id: string) => void;
+  onAdd: (formData: FormData) => Promise<void>;
+  onUpdate: (id: string, formData: FormData) => Promise<void>;
+  onMoveToClose: (id: string, passwordConfirm: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }
 
 const emptyComplaint = {
-  bankName: "",
-  ackNumber: "",
-  ifscCode: "",
-  stateName: "",
-  dist: "",
+  bank_name: "",
+  ack_number: "",
+  ifsc_code: "",
+  state_name: "",
+  district: "",
   layer: "",
-  txnAmount: 0,
-  disputeAmount: 0,
-  utrNumber: "",
-  policeStation: "",
-  vendorName: "",
-  nocFile: null,
-  nocFileName: "",
-  isComplete: false,
-  employeeId: "emp001",
+  txn_amount: 0,
+  dispute_amount: 0,
+  utr_number: "",
+  police_station: "",
+  vendor_name: "",
+  noc_file: null as File | null,
 };
 
 export function ActiveComplaints({
@@ -68,61 +65,84 @@ export function ActiveComplaints({
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [pendingAction, setPendingAction] = useState<"add" | "edit" | "complete" | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleInputChange = (field: string, value: string | number) => {
+    if (passwordError) setPasswordError("");
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setFormData((prev) => ({ ...prev, nocFile: file, nocFileName: file.name }));
+      setFormData((prev) => ({ ...prev, noc_file: file }));
     }
   };
 
-  const isFormComplete = () => {
-    return (
-      formData.bankName &&
-      formData.ackNumber &&
-      formData.ifscCode &&
-      formData.stateName &&
-      formData.dist &&
-      formData.layer &&
-      formData.txnAmount > 0 &&
-      formData.disputeAmount > 0 &&
-      formData.utrNumber &&
-      formData.policeStation &&
-      formData.vendorName &&
-      formData.nocFileName
-    );
+  const handleKeyDown = (e: React.KeyboardEvent, nextId: string) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const nextElement = document.getElementById(nextId);
+      if (nextElement) {
+        nextElement.focus();
+      } else {
+        // Last field, trigger submit
+        if (showAddModal) handleAddClick();
+        if (showEditModal) handleEditSubmit();
+      }
+    }
   };
 
-  const handlePasswordSubmit = () => {
-    if (password === "1234") {
-      setPasswordError("");
-      setShowPasswordModal(false);
-      setPassword("");
+  const createFormData = (passwordConfirm: string) => {
+    const data = new FormData();
+    let hasFile = false;
 
+    Object.entries(formData).forEach(([key, value]) => {
+      if (value !== null) {
+        if (key === 'noc_file' && typeof value === 'string') return;
+        
+        if (key === 'noc_file' && value instanceof File) {
+          hasFile = true;
+        }
+        // Don't append empty strings for optional fields so the backend doesn't trigger invalid validations
+        if (value === '' && ['utr_number', 'police_station', 'vendor_name'].includes(key)) return;
+
+        data.append(key, value as any);
+      }
+    });
+    data.append('password_confirm', passwordConfirm);
+    if (hasFile) {
+      data.append('is_complete', 'true');
+    }
+    return data;
+  };
+
+  const handlePasswordSubmit = async () => {
+    setIsSubmitting(true);
+    setPasswordError("");
+    try {
       if (pendingAction === "add") {
-        onAdd({ ...formData, isComplete: isFormComplete() });
+        await onAdd(createFormData(password));
         setShowAddModal(false);
         setFormData(emptyComplaint);
       } else if (pendingAction === "edit" && selectedComplaint) {
-        const isComplete = isFormComplete();
-        onUpdate(selectedComplaint.id, { ...formData, isComplete });
-        if (isComplete) {
-          onMoveToClose(selectedComplaint.id);
-        }
+        const rowId = selectedComplaint.id || (selectedComplaint as any)._id;
+        await onUpdate(rowId, createFormData(password));
         setShowEditModal(false);
         setSelectedComplaint(null);
         setFormData(emptyComplaint);
       } else if (pendingAction === "complete" && selectedComplaint) {
-        onMoveToClose(selectedComplaint.id);
+        const rowId = selectedComplaint.id || (selectedComplaint as any)._id;
+        await onMoveToClose(rowId, password);
         setSelectedComplaint(null);
       }
+      setShowPasswordModal(false);
+      setPassword("");
       setPendingAction(null);
-    } else {
-      setPasswordError("Invalid password");
+    } catch (err: any) {
+      setPasswordError("Action failed. Check password or connection.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -134,21 +154,18 @@ export function ActiveComplaints({
   const handleEditClick = (complaint: CyberComplaint) => {
     setSelectedComplaint(complaint);
     setFormData({
-      bankName: complaint.bankName,
-      ackNumber: complaint.ackNumber,
-      ifscCode: complaint.ifscCode,
-      stateName: complaint.stateName,
-      dist: complaint.dist,
+      bank_name: complaint.bank_name,
+      ack_number: complaint.ack_number,
+      ifsc_code: complaint.ifsc_code,
+      state_name: complaint.state_name,
+      district: complaint.district,
       layer: complaint.layer,
-      txnAmount: complaint.txnAmount,
-      disputeAmount: complaint.disputeAmount,
-      utrNumber: complaint.utrNumber,
-      policeStation: complaint.policeStation,
-      vendorName: complaint.vendorName,
-      nocFile: complaint.nocFile,
-      nocFileName: complaint.nocFileName,
-      isComplete: complaint.isComplete,
-      employeeId: complaint.employeeId,
+      txn_amount: complaint.txn_amount,
+      dispute_amount: complaint.dispute_amount,
+      utr_number: complaint.utr_number,
+      police_station: complaint.police_station,
+      vendor_name: complaint.vendor_name,
+      noc_file: null,
     });
     setShowEditModal(true);
   };
@@ -164,13 +181,16 @@ export function ActiveComplaints({
     setShowPasswordModal(true);
   };
 
-  const FormFields = () => (
+  const renderFormFields = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">Bank Name *</label>
         <Input
-          value={formData.bankName}
-          onChange={(e) => handleInputChange("bankName", e.target.value)}
+          id="f1"
+          autoFocus
+          value={formData.bank_name}
+          onChange={(e) => handleInputChange("bank_name", e.target.value)}
+          onKeyDown={(e) => handleKeyDown(e, "f2")}
           placeholder="Enter bank name"
           className="bg-gray-50 border-gray-200 text-gray-800"
         />
@@ -178,8 +198,10 @@ export function ActiveComplaints({
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">ACK Number *</label>
         <Input
-          value={formData.ackNumber}
-          onChange={(e) => handleInputChange("ackNumber", e.target.value)}
+          id="f2"
+          value={formData.ack_number}
+          onChange={(e) => handleInputChange("ack_number", e.target.value)}
+          onKeyDown={(e) => handleKeyDown(e, "f3")}
           placeholder="Enter ACK number"
           className="bg-gray-50 border-gray-200 text-gray-800"
         />
@@ -187,8 +209,10 @@ export function ActiveComplaints({
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">IFSC Code *</label>
         <Input
-          value={formData.ifscCode}
-          onChange={(e) => handleInputChange("ifscCode", e.target.value)}
+          id="f3"
+          value={formData.ifsc_code}
+          onChange={(e) => handleInputChange("ifsc_code", e.target.value)}
+          onKeyDown={(e) => handleKeyDown(e, "f4")}
           placeholder="Enter IFSC code"
           className="bg-gray-50 border-gray-200 text-gray-800"
         />
@@ -196,8 +220,10 @@ export function ActiveComplaints({
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">State Name *</label>
         <Input
-          value={formData.stateName}
-          onChange={(e) => handleInputChange("stateName", e.target.value)}
+          id="f4"
+          value={formData.state_name}
+          onChange={(e) => handleInputChange("state_name", e.target.value)}
+          onKeyDown={(e) => handleKeyDown(e, "f5")}
           placeholder="Enter state"
           className="bg-gray-50 border-gray-200 text-gray-800"
         />
@@ -205,8 +231,10 @@ export function ActiveComplaints({
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">District *</label>
         <Input
-          value={formData.dist}
-          onChange={(e) => handleInputChange("dist", e.target.value)}
+          id="f5"
+          value={formData.district}
+          onChange={(e) => handleInputChange("district", e.target.value)}
+          onKeyDown={(e) => handleKeyDown(e, "f6")}
           placeholder="Enter district"
           className="bg-gray-50 border-gray-200 text-gray-800"
         />
@@ -214,8 +242,10 @@ export function ActiveComplaints({
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">Layer *</label>
         <Input
+          id="f6"
           value={formData.layer}
           onChange={(e) => handleInputChange("layer", e.target.value)}
+          onKeyDown={(e) => handleKeyDown(e, "f7")}
           placeholder="Enter layer"
           className="bg-gray-50 border-gray-200 text-gray-800"
         />
@@ -223,9 +253,11 @@ export function ActiveComplaints({
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">TXN Amount *</label>
         <Input
+          id="f7"
           type="number"
-          value={formData.txnAmount || ""}
-          onChange={(e) => handleInputChange("txnAmount", parseFloat(e.target.value) || 0)}
+          value={formData.txn_amount || ""}
+          onChange={(e) => handleInputChange("txn_amount", parseFloat(e.target.value) || 0)}
+          onKeyDown={(e) => handleKeyDown(e, "f8")}
           placeholder="Enter transaction amount"
           className="bg-gray-50 border-gray-200 text-gray-800"
         />
@@ -233,53 +265,62 @@ export function ActiveComplaints({
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">Dispute Amount *</label>
         <Input
+          id="f8"
           type="number"
-          value={formData.disputeAmount || ""}
-          onChange={(e) => handleInputChange("disputeAmount", parseFloat(e.target.value) || 0)}
+          value={formData.dispute_amount || ""}
+          onChange={(e) => handleInputChange("dispute_amount", parseFloat(e.target.value) || 0)}
+          onKeyDown={(e) => handleKeyDown(e, "f9")}
           placeholder="Enter dispute amount"
           className="bg-gray-50 border-gray-200 text-gray-800"
         />
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">UTR Number *</label>
+        <label className="text-sm font-medium text-gray-700">UTR Number</label>
         <Input
-          value={formData.utrNumber}
-          onChange={(e) => handleInputChange("utrNumber", e.target.value)}
+          id="f9"
+          value={formData.utr_number}
+          onChange={(e) => handleInputChange("utr_number", e.target.value)}
+          onKeyDown={(e) => handleKeyDown(e, "f10")}
           placeholder="Enter UTR number"
           className="bg-gray-50 border-gray-200 text-gray-800"
         />
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Police Station *</label>
+        <label className="text-sm font-medium text-gray-700">Police Station</label>
         <Input
-          value={formData.policeStation}
-          onChange={(e) => handleInputChange("policeStation", e.target.value)}
+          id="f10"
+          value={formData.police_station}
+          onChange={(e) => handleInputChange("police_station", e.target.value)}
+          onKeyDown={(e) => handleKeyDown(e, "f11")}
           placeholder="Enter police station"
           className="bg-gray-50 border-gray-200 text-gray-800"
         />
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Vendor Name *</label>
+        <label className="text-sm font-medium text-gray-700">Vendor Name</label>
         <Input
-          value={formData.vendorName}
-          onChange={(e) => handleInputChange("vendorName", e.target.value)}
+          id="f11"
+          value={formData.vendor_name}
+          onChange={(e) => handleInputChange("vendor_name", e.target.value)}
+          onKeyDown={(e) => handleKeyDown(e, "f12")}
           placeholder="Enter vendor name"
           className="bg-gray-50 border-gray-200 text-gray-800"
         />
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">NOC File Upload *</label>
+        <label className="text-sm font-medium text-gray-700">NOC File Upload (Auto-closes if provided)</label>
         <div className="flex items-center gap-2">
           <Input
+            id="f12"
             type="file"
             onChange={handleFileChange}
             className="bg-gray-50 border-gray-200 text-gray-800"
             accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
           />
         </div>
-        {formData.nocFileName && (
+        {formData.noc_file && (
           <p className="text-xs text-[#e74c3c] flex items-center gap-1">
-            <Upload className="w-3 h-3" /> {formData.nocFileName}
+            <Upload className="w-3 h-3" /> {formData.noc_file.name}
           </p>
         )}
       </div>
@@ -372,7 +413,7 @@ export function ActiveComplaints({
               <div>
                 <p className="text-sm text-gray-600">Complete</p>
                 <p className="text-2xl font-bold text-gray-800">
-                  {complaints.filter(c => c.isComplete).length}
+                  {complaints.filter(c => c.is_complete).length}
                 </p>
               </div>
               <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-green-50">
@@ -391,7 +432,7 @@ export function ActiveComplaints({
               <div>
                 <p className="text-sm text-gray-600">Incomplete</p>
                 <p className="text-2xl font-bold text-gray-800">
-                  {complaints.filter(c => !c.isComplete).length}
+                  {complaints.filter(c => !c.is_complete).length}
                 </p>
               </div>
               <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-red-50">
@@ -425,7 +466,6 @@ export function ActiveComplaints({
                     "Police Station",
                     "Vendor Name",
                     "NOC File",
-                    "Status",
                     "Actions",
                   ].map((header) => (
                     <th
@@ -439,9 +479,11 @@ export function ActiveComplaints({
               </thead>
               <tbody className="divide-y divide-gray-100">
                 <AnimatePresence>
-                  {complaints.map((complaint, index) => (
+                  {complaints.map((complaint, index) => {
+                    const rowId = complaint.id || (complaint as any)._id;
+                    return (
                     <motion.tr
-                      key={complaint.id}
+                      key={rowId}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 20 }}
@@ -449,57 +491,46 @@ export function ActiveComplaints({
                       className="hover:bg-gray-50 transition-colors"
                     >
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
-                        {complaint.bankName}
+                        {complaint.bank_name}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap font-mono">
-                        {complaint.ackNumber}
+                        {complaint.ack_number}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap font-mono">
-                        {complaint.ifscCode}
+                        {complaint.ifsc_code}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
-                        {complaint.stateName}
+                        {complaint.state_name}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
-                        {complaint.dist}
+                        {complaint.district}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
                         {complaint.layer}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
-                        ₹{complaint.txnAmount.toLocaleString()}
+                        ₹{Number(complaint.txn_amount).toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
-                        ₹{complaint.disputeAmount.toLocaleString()}
+                        ₹{Number(complaint.dispute_amount).toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap font-mono">
-                        {complaint.utrNumber}
+                        {complaint.utr_number}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
-                        {complaint.policeStation}
+                        {complaint.police_station}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
-                        {complaint.vendorName}
+                        {complaint.vendor_name}
                       </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        {complaint.nocFileName ? (
-                          <span className="text-green-600 flex items-center gap-1">
-                            <Check className="w-3 h-3" /> Uploaded
-                          </span>
+                        {complaint.noc_file ? (
+                          <a href={complaint.noc_file} target="_blank" rel="noopener noreferrer" className="text-blue-600 flex items-center gap-1 hover:underline">
+                            <Check className="w-3 h-3" /> View NOC
+                          </a>
                         ) : (
                           <span className="text-red-600 flex items-center gap-1">
                             <X className="w-3 h-3" /> Missing
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm whitespace-nowrap">
-                        {complaint.isComplete ? (
-                          <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">
-                            Complete
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs">
-                            Incomplete
                           </span>
                         )}
                       </td>
@@ -513,7 +544,7 @@ export function ActiveComplaints({
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
-                          {complaint.isComplete && (
+                          {!complaint.is_complete && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -526,7 +557,7 @@ export function ActiveComplaints({
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => onDelete(complaint.id)}
+                            onClick={() => onDelete(rowId)}
                             className="h-8 w-8 hover:bg-red-50 hover:text-red-600"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -534,7 +565,8 @@ export function ActiveComplaints({
                         </div>
                       </td>
                     </motion.tr>
-                  ))}
+                    );
+                  })}
                 </AnimatePresence>
               </tbody>
             </table>
@@ -560,7 +592,7 @@ export function ActiveComplaints({
               Fill in all the details. Password confirmation required.
             </DialogDescription>
           </DialogHeader>
-          <FormFields />
+          {renderFormFields()}
           <div className="flex justify-end gap-3 mt-4">
             <Button
               variant="outline"
@@ -592,7 +624,7 @@ export function ActiveComplaints({
               Update the complaint details. Password confirmation required.
             </DialogDescription>
           </DialogHeader>
-          <FormFields />
+          {renderFormFields()}
           <div className="flex justify-end gap-3 mt-4">
             <Button
               variant="outline"
@@ -627,8 +659,9 @@ export function ActiveComplaints({
           </DialogHeader>
           <div className="space-y-4">
             <Input
+              id="pass-input"
               type="password"
-              placeholder="Enter password (1234)"
+              placeholder="Enter password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="bg-gray-50 border-gray-200 text-gray-800"
@@ -640,6 +673,7 @@ export function ActiveComplaints({
             <div className="flex justify-end gap-3">
               <Button
                 variant="outline"
+                disabled={isSubmitting}
                 onClick={() => {
                   setShowPasswordModal(false);
                   setPassword("");
@@ -650,11 +684,12 @@ export function ActiveComplaints({
                 Cancel
               </Button>
               <Button
+                disabled={isSubmitting}
                 onClick={handlePasswordSubmit}
                 className="text-white"
                 style={{ background: "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)" }}
               >
-                Confirm
+                {isSubmitting ? "Processing..." : "Confirm"}
               </Button>
             </div>
           </div>

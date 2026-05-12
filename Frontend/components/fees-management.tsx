@@ -11,6 +11,7 @@ import {
   Calendar,
   TrendingUp,
   LayoutDashboard,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,15 +22,44 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import type { AdvEntry, CyberEntry, TimeFilter } from "@/lib/store";
-import { filterByTime } from "@/lib/store";
+import type { AdvEntry, CyberEntry } from "@/lib/api-service";
 
 interface FeesManagementProps {
   advEntries: AdvEntry[];
   cyberEntries: CyberEntry[];
-  onAddAdv: (entry: Omit<AdvEntry, "id" | "createdAt">) => void;
-  onAddCyber: (entry: Omit<CyberEntry, "id" | "createdAt">) => void;
+  onAddAdv: (data: { name: string, fees: number, password_confirm: string }) => Promise<void>;
+  onAddCyber: (data: { name: string, fees: number, password_confirm: string }) => Promise<void>;
   onBack: () => void;
+}
+
+export type TimeFilter = 'daily' | 'weekly' | 'monthly' | 'yearly';
+
+export function filterByTime<T extends { created_at: string }>(items: T[], filter: TimeFilter): T[] {
+  if (!Array.isArray(items)) return [];
+
+  const now = new Date();
+  const startDate = new Date();
+
+  switch (filter) {
+    case 'daily':
+      startDate.setHours(0, 0, 0, 0);
+      break;
+    case 'weekly':
+      startDate.setDate(now.getDate() - 7);
+      break;
+    case 'monthly':
+      startDate.setMonth(now.getMonth() - 1);
+      break;
+    case 'yearly':
+      startDate.setFullYear(now.getFullYear() - 1);
+      break;
+  }
+
+  return items.filter(item => {
+    const dateStr = item.created_at || (item as any).createdAt;
+    if (!dateStr) return true; // Include if date is missing to avoid hiding entries
+    return new Date(dateStr) >= startDate;
+  });
 }
 
 export function FeesManagement({
@@ -41,41 +71,49 @@ export function FeesManagement({
 }: FeesManagementProps) {
   const [showAdvModal, setShowAdvModal] = useState(false);
   const [showCyberModal, setShowCyberModal] = useState(false);
-  const [advName, setAdvName] = useState("");
-  const [advFees, setAdvFees] = useState("");
-  const [cyberName, setCyberName] = useState("");
-  const [cyberFees, setCyberFees] = useState("");
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [name, setName] = useState("");
+  const [fees, setFees] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [pendingType, setPendingType] = useState<"adv" | "cyber" | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("monthly");
 
   const filteredAdvEntries = filterByTime(advEntries, timeFilter);
   const filteredCyberEntries = filterByTime(cyberEntries, timeFilter);
 
-  const advTotal = filteredAdvEntries.reduce((sum, e) => sum + e.advFees, 0);
-  const cyberTotal = filteredCyberEntries.reduce((sum, e) => sum + e.cyberFees, 0);
+  const advTotal = filteredAdvEntries.reduce((sum, e) => sum + Number(e.fees), 0);
+  const cyberTotal = filteredCyberEntries.reduce((sum, e) => sum + Number(e.fees), 0);
 
-  const handleAddAdv = () => {
-    if (advName && advFees) {
-      onAddAdv({
-        advName,
-        advFees: parseFloat(advFees),
-        employeeId: "emp001",
-      });
-      setAdvName("");
-      setAdvFees("");
-      setShowAdvModal(false);
-    }
+  const handleOpenPasswordModal = (type: "adv" | "cyber") => {
+    if (type === "adv" && (!name || !fees)) return;
+    if (type === "cyber" && (!name || !fees)) return;
+    setPendingType(type);
+    setShowPasswordModal(true);
   };
 
-  const handleAddCyber = () => {
-    if (cyberName && cyberFees) {
-      onAddCyber({
-        cyberName,
-        cyberFees: parseFloat(cyberFees),
-        employeeId: "emp001",
-      });
-      setCyberName("");
-      setCyberFees("");
-      setShowCyberModal(false);
+  const handlePasswordSubmit = async () => {
+    setIsSubmitting(true);
+    setPasswordError("");
+    try {
+      const payload = { name, fees: parseFloat(fees), password_confirm: password };
+      if (pendingType === "adv") {
+        await onAddAdv(payload);
+        setShowAdvModal(false);
+      } else {
+        await onAddCyber(payload);
+        setShowCyberModal(false);
+      }
+      setName("");
+      setFees("");
+      setPassword("");
+      setShowPasswordModal(false);
+      setPendingType(null);
+    } catch (err) {
+      setPasswordError("Action failed. Check password.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -155,7 +193,7 @@ export function FeesManagement({
           className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"
         >
           <div
-            onClick={() => setShowAdvModal(true)}
+            onClick={() => { setName(""); setFees(""); setShowAdvModal(true); }}
             className="bg-white rounded-lg shadow-sm p-6 cursor-pointer stat-card flex items-center justify-between"
             style={{ borderLeft: "4px solid #3498db" }}
           >
@@ -172,7 +210,7 @@ export function FeesManagement({
           </div>
 
           <div
-            onClick={() => setShowCyberModal(true)}
+            onClick={() => { setName(""); setFees(""); setShowCyberModal(true); }}
             className="bg-white rounded-lg shadow-sm p-6 cursor-pointer stat-card flex items-center justify-between"
             style={{ borderLeft: "4px solid #e74c3c" }}
           >
@@ -277,15 +315,15 @@ export function FeesManagement({
                         className="hover:bg-gray-50 transition-colors"
                       >
                         <td className="px-4 py-3 text-sm text-gray-800">
-                          {entry.advName}
+                          {entry.name}
                         </td>
                         <td className="px-4 py-3 text-sm text-blue-600 font-semibold">
-                          ₹{entry.advFees.toLocaleString()}
+                          ₹{Number(entry.fees).toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
-                            {new Date(entry.createdAt).toLocaleDateString()}
+                            {new Date(entry.created_at || (entry as any).createdAt).toLocaleDateString()}
                           </div>
                         </td>
                       </motion.tr>
@@ -341,15 +379,15 @@ export function FeesManagement({
                         className="hover:bg-gray-50 transition-colors"
                       >
                         <td className="px-4 py-3 text-sm text-gray-800">
-                          {entry.cyberName}
+                          {entry.name}
                         </td>
                         <td className="px-4 py-3 text-sm text-red-600 font-semibold">
-                          ₹{entry.cyberFees.toLocaleString()}
+                          ₹{Number(entry.fees).toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
-                            {new Date(entry.createdAt).toLocaleDateString()}
+                            {new Date(entry.created_at || (entry as any).createdAt).toLocaleDateString()}
                           </div>
                         </td>
                       </motion.tr>
@@ -384,8 +422,8 @@ export function FeesManagement({
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">ADV Name</label>
               <Input
-                value={advName}
-                onChange={(e) => setAdvName(e.target.value)}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 placeholder="Enter ADV name"
                 className="bg-gray-50 border-gray-200 text-gray-800"
               />
@@ -394,8 +432,8 @@ export function FeesManagement({
               <label className="text-sm font-medium text-gray-700">ADV Fees</label>
               <Input
                 type="number"
-                value={advFees}
-                onChange={(e) => setAdvFees(e.target.value)}
+                value={fees}
+                onChange={(e) => setFees(e.target.value)}
                 placeholder="Enter fee amount"
                 className="bg-gray-50 border-gray-200 text-gray-800"
               />
@@ -409,7 +447,7 @@ export function FeesManagement({
                 Cancel
               </Button>
               <Button
-                onClick={handleAddAdv}
+                onClick={() => handleOpenPasswordModal("adv")}
                 className="bg-blue-500 hover:bg-blue-600 text-white"
               >
                 Add Entry
@@ -435,8 +473,8 @@ export function FeesManagement({
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">Cyber Name</label>
               <Input
-                value={cyberName}
-                onChange={(e) => setCyberName(e.target.value)}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 placeholder="Enter Cyber name"
                 className="bg-gray-50 border-gray-200 text-gray-800"
               />
@@ -445,8 +483,8 @@ export function FeesManagement({
               <label className="text-sm font-medium text-gray-700">Cyber Fees</label>
               <Input
                 type="number"
-                value={cyberFees}
-                onChange={(e) => setCyberFees(e.target.value)}
+                value={fees}
+                onChange={(e) => setFees(e.target.value)}
                 placeholder="Enter fee amount"
                 className="bg-gray-50 border-gray-200 text-gray-800"
               />
@@ -460,11 +498,61 @@ export function FeesManagement({
                 Cancel
               </Button>
               <Button
-                onClick={handleAddCyber}
+                onClick={() => handleOpenPasswordModal("cyber")}
                 className="text-white"
                 style={{ background: "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)" }}
               >
                 Add Entry
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Password Modal */}
+      <Dialog open={showPasswordModal} onOpenChange={setShowPasswordModal}>
+        <DialogContent className="max-w-sm bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              <Lock className="w-5 h-5 text-[#e74c3c]" />
+              Password Confirmation
+            </DialogTitle>
+            <DialogDescription className="text-gray-500">
+              Enter password to confirm this action
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              type="password"
+              placeholder="Enter password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="bg-gray-50 border-gray-200 text-gray-800"
+              onKeyDown={(e) => e.key === "Enter" && handlePasswordSubmit()}
+            />
+            {passwordError && (
+              <p className="text-red-600 text-sm">{passwordError}</p>
+            )}
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                disabled={isSubmitting}
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setPassword("");
+                  setPasswordError("");
+                }}
+                className="border-gray-200"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={isSubmitting}
+                onClick={handlePasswordSubmit}
+                className="text-white"
+                style={{ background: "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)" }}
+              >
+                {isSubmitting ? "Processing..." : "Confirm"}
               </Button>
             </div>
           </div>

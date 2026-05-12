@@ -1,2 +1,4 @@
 # CyberFollower
 CyberFollower
+LoginPassword : python manage.py shell -c "import os; from core.models import Employee; phone=os.getenv('DEFAULT_ADMIN_PHONE'); pw=os.getenv('DEFAULT_ADMIN_PASSWORD'); Employee.objects.create_superuser(phone_number=phone, full_name='Admin', password=pw) if not Employee.objects.filter(phone_number=phone).exists() else print('User already exists in database')"
+EnvLoginPassword : python manage.py shell -c "import os; from core.models import Employee; phone=os.getenv('DEFAULT_ADMIN_PHONE'); pw=os.getenv('DEFAULT_ADMIN_PASSWORD'); Employee.objects.create_superuser(phone_number=phone, full_name='Admin', password=pw) if not Employee.objects.filter(phone_number=phone).exists() else print('Ready')"

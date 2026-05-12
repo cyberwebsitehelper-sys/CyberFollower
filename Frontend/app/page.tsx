@@ -9,22 +9,8 @@ import { ClosedComplaints } from "@/components/closed-complaints";
 import { EmployeeData } from "@/components/employee-data";
 import { FeesManagement } from "@/components/fees-management";
 import { HistoryAnalytics } from "@/components/history-analytics";
-import {
-  type CyberComplaint,
-  type AdvEntry,
-  type CyberEntry,
-  initializeSampleData,
-  getActiveComplaints,
-  getClosedComplaints,
-  getAdvEntries,
-  getCyberEntries,
-  addComplaint,
-  updateComplaint,
-  moveToClosedComplaints,
-  deleteActiveComplaint,
-  addAdvEntry,
-  addCyberEntry,
-} from "@/lib/store";
+import { apiService, type CyberComplaint, type AdvEntry, type CyberEntry, type DashboardStats } from "@/lib/api-service";
+import { toast } from "sonner";
 
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -33,66 +19,133 @@ export default function Home() {
   const [closedComplaints, setClosedComplaints] = useState<CyberComplaint[]>([]);
   const [advEntries, setAdvEntries] = useState<AdvEntry[]>([]);
   const [cyberEntries, setCyberEntries] = useState<CyberEntry[]>([]);
+  const [stats, setStats] = useState<DashboardStats>({
+    active_count: 0,
+    closed_count: 0,
+    adv_fee_total: 0,
+    cyber_fee_total: 0,
+    grand_total_fees: 0
+  });
 
-  // Initialize sample data and load state
   useEffect(() => {
-    initializeSampleData();
-    refreshData();
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      setIsLoggedIn(true);
+      refreshData();
+    }
   }, []);
 
-  const refreshData = () => {
-    setActiveComplaints(getActiveComplaints());
-    setClosedComplaints(getClosedComplaints());
-    setAdvEntries(getAdvEntries());
-    setCyberEntries(getCyberEntries());
+  const refreshData = async () => {
+    try {
+      const results = await Promise.allSettled([
+        apiService.getComplaints('active'),
+        apiService.getComplaints('closed'),
+        apiService.getAdvEntries(),
+        apiService.getCyberEntries(),
+        apiService.getStats(),
+      ]);
+
+      const extractData = (res: any) => {
+        if (res.status !== 'fulfilled') return [];
+        return Array.isArray(res.value) ? res.value : res.value?.results || res.value?.data || [];
+      };
+
+      setActiveComplaints(extractData(results[0]));
+      setClosedComplaints(extractData(results[1]));
+      setAdvEntries(extractData(results[2]));
+      setCyberEntries(extractData(results[3]));
+      if (results[4].status === 'fulfilled' && results[4].value) {
+        setStats(results[4].value);
+      }
+    } catch (error) {
+      console.error("Failed to fetch data", error);
+    }
   };
 
-  const handleLogin = () => {
-    setIsLoggedIn(true);
+  const handleLogin = async (phoneNumber: string, passwordConfirm: string) => {
+    try {
+      const data = await apiService.login(phoneNumber, passwordConfirm);
+      if (data.access) {
+        setIsLoggedIn(true);
+        refreshData();
+        toast.success("Logged in successfully");
+      } else {
+        toast.error(data.detail || "Login failed");
+        throw new Error(data.detail || "Login failed");
+      }
+    } catch (error: any) {
+      toast.error("Login failed. Please check your credentials.");
+      throw error;
+    }
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
     setIsLoggedIn(false);
     setCurrentView("dashboard");
+    toast.info("Logged out");
   };
 
-  const handleAddComplaint = (
-    complaint: Omit<CyberComplaint, "id" | "createdAt" | "completedAt">
-  ) => {
-    addComplaint(complaint);
-    refreshData();
+  const handleAddComplaint = async (formData: FormData) => {
+    try {
+      await apiService.addComplaint(formData);
+      refreshData();
+      toast.success("Complaint added successfully");
+    } catch (error) {
+      toast.error("Failed to add complaint");
+    }
   };
 
-  const handleUpdateComplaint = (id: string, updates: Partial<CyberComplaint>) => {
-    updateComplaint(id, updates);
-    refreshData();
+  const handleUpdateComplaint = async (id: string, formData: FormData) => {
+    try {
+      await apiService.updateComplaint(id, formData);
+      refreshData();
+      toast.success("Complaint updated successfully");
+    } catch (error) {
+      toast.error("Failed to update complaint");
+    }
   };
 
-  const handleMoveToClose = (id: string) => {
-    moveToClosedComplaints(id);
-    refreshData();
+  const handleMoveToClose = async (id: string, passwordConfirm: string) => {
+    try {
+      await apiService.closeComplaint(id, passwordConfirm);
+      refreshData();
+      toast.success("Complaint closed successfully");
+    } catch (error) {
+      toast.error("Failed to close complaint. Check password.");
+    }
   };
 
-  const handleDeleteComplaint = (id: string) => {
-    deleteActiveComplaint(id);
-    refreshData();
+  const handleDeleteComplaint = async (id: string) => {
+    try {
+      await apiService.deleteComplaint(id);
+      refreshData();
+      toast.success("Complaint deleted");
+    } catch (error) {
+      toast.error("Failed to delete complaint");
+    }
   };
 
-  const handleAddAdv = (entry: Omit<AdvEntry, "id" | "createdAt">) => {
-    addAdvEntry(entry);
-    refreshData();
+  const handleAddAdv = async (data: { name: string, fees: number, password_confirm: string }) => {
+    try {
+      await apiService.addAdvEntry(data);
+      refreshData();
+      toast.success("ADV fee entry added");
+    } catch (error) {
+      toast.error("Failed to add ADV entry");
+    }
   };
 
-  const handleAddCyber = (entry: Omit<CyberEntry, "id" | "createdAt">) => {
-    addCyberEntry(entry);
-    refreshData();
-  };
-
-  const stats = {
-    activeCount: activeComplaints.length,
-    closedCount: closedComplaints.length,
-    advTotal: advEntries.reduce((sum, e) => sum + e.advFees, 0),
-    cyberTotal: cyberEntries.reduce((sum, e) => sum + e.cyberFees, 0),
+  const handleAddCyber = async (data: { name: string, fees: number, password_confirm: string }) => {
+    try {
+      await apiService.addCyberEntry(data);
+      refreshData();
+      toast.success("Cyber fee entry added");
+    } catch (error) {
+      toast.error("Failed to add Cyber entry");
+    }
   };
 
   const pageVariants = {
@@ -102,7 +155,8 @@ export default function Home() {
   };
 
   if (!isLoggedIn) {
-    return <LoginPage onLogin={handleLogin} />;
+    return <LoginPage onLogin={(phone) => {/* Handle logic in LoginPage component or pass a function that accepts both phone and pass */}}
+                      onLoginSubmit={handleLogin} />;
   }
 
   return (
@@ -119,7 +173,12 @@ export default function Home() {
           <Dashboard
             onNavigate={setCurrentView}
             onLogout={handleLogout}
-            stats={stats}
+            stats={{
+              activeCount: stats.active_count || activeComplaints.length,
+              closedCount: stats.closed_count || closedComplaints.length,
+              advTotal: stats.adv_fee_total || advEntries.reduce((sum, e) => sum + Number(e.fees), 0),
+              cyberTotal: stats.cyber_fee_total || cyberEntries.reduce((sum, e) => sum + Number(e.fees), 0)
+            }}
           />
         )}
 
