@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'core',
+    'storages',
 ]
 
 MIDDLEWARE = [
@@ -84,3 +85,25 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = True
+
+# Cloudflare R2 / AWS S3 Configuration
+CF_R2_BUCKET = os.getenv('CF_R2_BUCKET')
+
+if CF_R2_BUCKET:
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    AWS_ACCESS_KEY_ID = os.getenv('CF_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.getenv('CF_SECRET_ACCESS_KEY')
+    AWS_STORAGE_BUCKET_NAME = CF_R2_BUCKET
+    AWS_S3_ENDPOINT_URL = f"https://{os.getenv('CF_ACCOUNT_ID')}.r2.cloudflarestorage.com"
+    AWS_S3_REGION_NAME = 'auto'
+    
+    AWS_S3_SIGNATURE_VERSION = 's3v4'
+    # R2 does not support ACLs, so this is required to avoid AccessDenied errors
+    AWS_DEFAULT_ACL = None
+    
+    # CRITICAL: Disables security signatures on URLs so Cloudflare can serve them publicly
+    AWS_QUERYSTRING_AUTH = False
+    AWS_S3_FILE_OVERWRITE = False
+    
+    if os.getenv('CF_R2_PUBLIC_URL'):
+        AWS_S3_CUSTOM_DOMAIN = os.getenv('CF_R2_PUBLIC_URL').replace('https://', '').rstrip('/')

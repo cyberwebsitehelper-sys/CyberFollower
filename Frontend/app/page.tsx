@@ -93,18 +93,30 @@ export default function Home() {
       await apiService.addComplaint(formData);
       refreshData();
       toast.success("Complaint added successfully");
-    } catch (error) {
-      toast.error("Failed to add complaint");
+    } catch (error: any) {
+      console.error("Add complaint error:", error);
+      toast.error(`Failed to add: ${error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error"}`);
     }
   };
 
   const handleUpdateComplaint = async (id: string, formData: FormData) => {
     try {
+      // Automatically close the complaint if an NOC file was uploaded
+      const nocFile = formData.get("noc_file");
+      if (nocFile && typeof nocFile !== 'string' && nocFile.size > 0) {
+        formData.append("is_complete", "true");
+      }
+
       await apiService.updateComplaint(id, formData);
       refreshData();
-      toast.success("Complaint updated successfully");
-    } catch (error) {
-      toast.error("Failed to update complaint");
+      if (formData.has("is_complete")) {
+        toast.success("NOC file uploaded: Complaint moved to Closed");
+      } else {
+        toast.success("Complaint updated successfully");
+      }
+    } catch (error: any) {
+      console.error("Update complaint error:", error);
+      toast.error(`Failed to update: ${error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error"}`);
     }
   };
 
@@ -113,18 +125,20 @@ export default function Home() {
       await apiService.closeComplaint(id, passwordConfirm);
       refreshData();
       toast.success("Complaint closed successfully");
-    } catch (error) {
-      toast.error("Failed to close complaint. Check password.");
+    } catch (error: any) {
+      console.error("Close complaint error:", error);
+      toast.error(`Failed to close: ${error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error"}`);
     }
   };
 
-  const handleDeleteComplaint = async (id: string) => {
+  const handleDeleteComplaint = async (id: string, passwordConfirm?: string) => {
     try {
-      await apiService.deleteComplaint(id);
+      await apiService.deleteComplaint(id, passwordConfirm);
       refreshData();
       toast.success("Complaint deleted");
-    } catch (error) {
-      toast.error("Failed to delete complaint");
+    } catch (error: any) {
+      console.error("Delete complaint error:", error);
+      toast.error(`Failed to delete: ${error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error"}`);
     }
   };
 
@@ -174,10 +188,10 @@ export default function Home() {
             onNavigate={setCurrentView}
             onLogout={handleLogout}
             stats={{
-              activeCount: stats.active_count || activeComplaints.length,
-              closedCount: stats.closed_count || closedComplaints.length,
-              advTotal: stats.adv_fee_total || advEntries.reduce((sum, e) => sum + Number(e.fees), 0),
-              cyberTotal: stats.cyber_fee_total || cyberEntries.reduce((sum, e) => sum + Number(e.fees), 0)
+              activeCount: activeComplaints.length,
+              closedCount: closedComplaints.length,
+              advTotal: advEntries.reduce((sum, e) => sum + Number(e.fees), 0),
+              cyberTotal: cyberEntries.reduce((sum, e) => sum + Number(e.fees), 0)
             }}
           />
         )}

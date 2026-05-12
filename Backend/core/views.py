@@ -22,6 +22,15 @@ from .serializers import (
     DashboardStatsSerializer,
 )
 
+def is_marked_complete(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
+
 class IsSuperUser(permissions.BasePermission):
     def has_permission(self, request, view):
         return bool(request.user and (request.user.is_superuser or getattr(request.user, "is_super_role", False)))
@@ -85,33 +94,71 @@ class CyberComplaintViewSet(OwnedQuerysetMixin, viewsets.ModelViewSet):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def perform_create(self, serializer):
-        serializer.save(employee=self.request.user)
+        # Check validated_data for file presence
+        noc_file = serializer.validated_data.get('noc_file')
+        is_complete = bool(noc_file)
+        completed_at = timezone.now() if is_complete else None
+
+        serializer.save(
+            employee=self.request.user,
+            is_complete=is_complete,
+            completed_at=completed_at
+        )
+
+    def perform_update(self, serializer):
+        # Update logic to handle auto-completion
+        instance = self.get_object()
+        # If new file is uploaded OR it already had a file
+        noc_file = serializer.validated_data.get('noc_file')
+        is_complete_from_request = str(self.request.data.get("is_complete", "")).lower() in ("1", "true", "yes", "on")
+
+        is_complete = is_marked_complete(instance.is_complete)
+        completed_at = instance.completed_at
+
+        if noc_file:
+            is_complete = True
+            if not completed_at:
+                completed_at = timezone.now()
+        elif is_complete_from_request and not is_complete:
+            is_complete = True
+            completed_at = timezone.now()
+
+        serializer.save(
+            is_complete=is_complete,
+            completed_at=completed_at
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        pwd = request.data.get("password_confirm")
+        if not pwd or not request.user.check_password(pwd):
+            return Response({"detail": "Password confirmation failed to delete."}, status=status.HTTP_400_BAD_REQUEST)
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=['post'])
+    def close(self, request, pk=None):
+        complaint = self.get_object()
+        pwd = request.data.get("password_confirm")
+        if not pwd or not request.user.check_password(pwd):
+            return Response({"detail": "Password confirmation failed."}, status=status.HTTP_400_BAD_REQUEST)
+
+        complaint.is_complete = True
+        complaint.completed_at = timezone.now()
+        complaint.save(update_fields=['is_complete', 'completed_at'])
+        return Response({"status": "complaint closed"})
 
     @action(detail=False, methods=['get'])
     def active(self, request):
-        try:
-            qs = self.get_queryset().filter(is_complete=False)
-            serializer = self.get_serializer(qs, many=True)
-            return Response(serializer.data)
-        except:
-            # Djongo boolean filter fallback
-            all_objs = list(self.get_queryset())
-            filtered = [obj for obj in all_objs if not obj.is_complete]
-            serializer = self.get_serializer(filtered, many=True)
-            return Response(serializer.data)
+        all_objs = list(self.get_queryset())
+        filtered = [obj for obj in all_objs if not is_marked_complete(getattr(obj, "is_complete", False))]
+        serializer = self.get_serializer(filtered, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def closed(self, request):
-        try:
-            qs = self.get_queryset().filter(is_complete=True)
-            serializer = self.get_serializer(qs, many=True)
-            return Response(serializer.data)
-        except:
-            # Djongo boolean filter fallback
-            all_objs = list(self.get_queryset())
-            filtered = [obj for obj in all_objs if obj.is_complete]
-            serializer = self.get_serializer(filtered, many=True)
-            return Response(serializer.data)
+        all_objs = list(self.get_queryset())
+        filtered = [obj for obj in all_objs if is_marked_complete(getattr(obj, "is_complete", False))]
+        serializer = self.get_serializer(filtered, many=True)
+        return Response(serializer.data)
 
 class AdvFeeViewSet(OwnedQuerysetMixin, viewsets.ModelViewSet):
     queryset = AdvFeeEntry.objects.all().order_by("-created_at")
@@ -148,13 +195,9 @@ class DashboardStatsView(APIView):
         a_qs = AdvFeeEntry.objects.all() if is_super else AdvFeeEntry.objects.filter(employee=user)
         y_qs = CyberFeeEntry.objects.all() if is_super else CyberFeeEntry.objects.filter(employee=user)
 
-        try:
-            active_count = c_qs.filter(is_complete=False).count()
-            closed_count = c_qs.filter(is_complete=True).count()
-        except:
-            all_c = list(c_qs)
-            active_count = len([obj for obj in all_c if not obj.is_complete])
-            closed_count = len([obj for obj in all_c if obj.is_complete])
+        all_c = list(c_qs)
+        active_count = len([obj for obj in all_c if not is_marked_complete(getattr(obj, "is_complete", False))])
+        closed_count = len([obj for obj in all_c if is_marked_complete(getattr(obj, "is_complete", False))])
 
         try:
             adv_total_raw = a_qs.aggregate(s=Sum("fees"))["s"]

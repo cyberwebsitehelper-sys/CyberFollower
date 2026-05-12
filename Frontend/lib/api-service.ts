@@ -1,4 +1,8 @@
 import { api } from './api-client';
+const envUrl = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE_URL = (envUrl && envUrl.trim() !== "")
+  ? envUrl.trim().replace(/\/+$/, '')
+  : 'http://127.0.0.1:8000';
 
 export interface CyberComplaint {
   id: string;
@@ -44,6 +48,18 @@ export interface DashboardStats {
   grand_total_fees: number;
 }
 
+const resolveFileUrl = (value: string | null): string | null => {
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  const normalizedPath = value.startsWith('/') ? value : `/${value}`;
+  return `${API_BASE_URL}${normalizedPath}`;
+};
+
+const normalizeComplaint = (item: CyberComplaint): CyberComplaint => ({
+  ...item,
+  noc_file: resolveFileUrl(item.noc_file),
+});
+
 export const apiService = {
   login: async (phoneNumber: string, password: string) => {
     const data = await api.post('/api/auth/login/', { phone_number: phoneNumber, password });
@@ -57,10 +73,17 @@ export const apiService = {
 
   getStats: (): Promise<DashboardStats> => api.get('/api/dashboard/stats/'),
 
-  getComplaints: (type: 'active' | 'closed' | 'all' = 'all'): Promise<CyberComplaint[]> => {
-    if (type === 'active') return api.get('/api/complaints/active/');
-    if (type === 'closed') return api.get('/api/complaints/closed/');
-    return api.get('/api/complaints/');
+  getComplaints: async (type: 'active' | 'closed' | 'all' = 'all'): Promise<CyberComplaint[]> => {
+    const endpoint =
+      type === 'active'
+        ? '/api/complaints/active/'
+        : type === 'closed'
+          ? '/api/complaints/closed/'
+          : '/api/complaints/';
+
+    const data = await api.get(endpoint);
+    const rows = Array.isArray(data) ? data : data?.results || [];
+    return rows.map(normalizeComplaint);
   },
 
   addComplaint: (formData: FormData) => api.post('/api/complaints/', formData),
@@ -70,7 +93,7 @@ export const apiService = {
   closeComplaint: (id: string, passwordConfirm: string) =>
     api.post(`/api/complaints/${id}/close/`, { password_confirm: passwordConfirm }),
 
-  deleteComplaint: (id: string) => api.delete(`/api/complaints/${id}/`),
+  deleteComplaint: (id: string, passwordConfirm?: string) => api.delete(`/api/complaints/${id}/`, { password_confirm: passwordConfirm }),
 
   getAdvEntries: (): Promise<AdvEntry[]> => api.get('/api/fees/adv/'),
 
