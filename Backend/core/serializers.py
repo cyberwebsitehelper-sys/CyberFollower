@@ -3,6 +3,17 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from .models import Employee, CyberComplaint, AdvFeeEntry, CyberFeeEntry
 
+# Import Decimal128 for Atlas compatibility
+try:
+    from bson import Decimal128
+except ImportError:
+    Decimal128 = None
+
+class SafeDecimalField(serializers.DecimalField):
+    def to_representation(self, value):
+        if Decimal128 and isinstance(value, Decimal128):
+            value = value.to_decimal()
+        return super().to_representation(value)
 
 class EmployeeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -47,6 +58,8 @@ class LoginSerializer(serializers.Serializer):
 
 class CyberComplaintSerializer(serializers.ModelSerializer):
     password_confirm = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    txn_amount = SafeDecimalField(max_digits=14, decimal_places=2, coerce_to_string=False)
+    dispute_amount = SafeDecimalField(max_digits=14, decimal_places=2, coerce_to_string=False)
 
     class Meta:
         model = CyberComplaint
@@ -87,6 +100,7 @@ class CyberComplaintSerializer(serializers.ModelSerializer):
 
 class FeeEntrySerializerBase(serializers.ModelSerializer):
     password_confirm = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    fees = SafeDecimalField(max_digits=14, decimal_places=2, coerce_to_string=False)
 
     class Meta:
         fields = ["id", "name", "fees", "created_at", "employee", "password_confirm"]
@@ -119,6 +133,6 @@ class CyberFeeEntrySerializer(FeeEntrySerializerBase):
 class DashboardStatsSerializer(serializers.Serializer):
     active_count = serializers.IntegerField()
     closed_count = serializers.IntegerField()
-    adv_fee_total = serializers.DecimalField(max_digits=16, decimal_places=2)
-    cyber_fee_total = serializers.DecimalField(max_digits=16, decimal_places=2)
-    grand_total_fees = serializers.DecimalField(max_digits=16, decimal_places=2)
+    adv_fee_total = SafeDecimalField(max_digits=16, decimal_places=2, coerce_to_string=False)
+    cyber_fee_total = SafeDecimalField(max_digits=16, decimal_places=2, coerce_to_string=False)
+    grand_total_fees = SafeDecimalField(max_digits=16, decimal_places=2, coerce_to_string=False)

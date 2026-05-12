@@ -30,15 +30,16 @@ class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        s = LoginSerializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        user = s.validated_data["user"]
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
-            "user": EmployeeSerializer(user).data,
-        })
+        serializer = LoginSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.validated_data['user']
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+                'user': EmployeeSerializer(user).data
+            })
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ChangePasswordView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -49,68 +50,68 @@ class ChangePasswordView(APIView):
             user = request.user
             user.set_password(serializer.validated_data['new_password'])
             user.save()
-            return Response({"detail": "Password updated successfully."}, status=status.HTTP_200_OK)
+            return Response({'detail': 'Password updated successfully.'}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.all().order_by("-date_joined")
-    permission_classes = [IsSuperUser]
+    permission_classes = [permissions.IsAuthenticated, IsSuperUser]
 
     def get_serializer_class(self):
         if self.action == 'create':
             return EmployeeCreateSerializer
         return EmployeeSerializer
 
-class OwnedQuerysetMixin:
-    """Employees see their own rows; super role sees all."""
-    owner_field = "employee"
+    @action(detail=True, methods=['post'], url_path='change-password')
+    def change_password(self, request, pk=None):
+        employee = self.get_object()
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            employee.set_password(serializer.validated_data['new_password'])
+            employee.save()
+            return Response({'status': 'password set'})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class OwnedQuerysetMixin:
     def get_queryset(self):
-        qs = super().get_queryset()
         user = self.request.user
         if getattr(user, "is_super_role", False) or user.is_superuser:
-            return qs
-        return qs.filter(**{self.owner_field: user})
+            return self.queryset
+        return self.queryset.filter(employee=user)
 
 class CyberComplaintViewSet(OwnedQuerysetMixin, viewsets.ModelViewSet):
     queryset = CyberComplaint.objects.all().order_by("-created_at")
     serializer_class = CyberComplaintSerializer
-    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def perform_create(self, serializer):
         serializer.save(employee=self.request.user)
 
-    @action(detail=False, methods=["get"], url_path="active")
+    @action(detail=False, methods=['get'])
     def active(self, request):
         try:
             qs = self.get_queryset().filter(is_complete=False)
-            return Response(self.get_serializer(qs, many=True).data)
-        except Exception:
-            all_qs = list(self.get_queryset())
-            active_list = [obj for obj in all_qs if not obj.is_complete]
-            return Response(self.get_serializer(active_list, many=True).data)
+            serializer = self.get_serializer(qs, many=True)
+            return Response(serializer.data)
+        except:
+            # Djongo boolean filter fallback
+            all_objs = list(self.get_queryset())
+            filtered = [obj for obj in all_objs if not obj.is_complete]
+            serializer = self.get_serializer(filtered, many=True)
+            return Response(serializer.data)
 
-    @action(detail=False, methods=["get"], url_path="closed")
+    @action(detail=False, methods=['get'])
     def closed(self, request):
         try:
             qs = self.get_queryset().filter(is_complete=True)
-            return Response(self.get_serializer(qs, many=True).data)
-        except Exception:
-            all_qs = list(self.get_queryset())
-            closed_list = [obj for obj in all_qs if obj.is_complete]
-            return Response(self.get_serializer(closed_list, many=True).data)
-
-    @action(detail=True, methods=["post"], url_path="close")
-    def close(self, request, pk=None):
-        pwd = request.data.get("password_confirm")
-        if not pwd or not request.user.check_password(pwd):
-            return Response({"password_confirm": "Password confirmation failed."},
-                            status=status.HTTP_400_BAD_REQUEST)
-        complaint = self.get_object()
-        complaint.is_complete = True
-        complaint.completed_at = timezone.now()
-        complaint.save(update_fields=["is_complete", "completed_at"])
-        return Response(self.get_serializer(complaint).data)
+            serializer = self.get_serializer(qs, many=True)
+            return Response(serializer.data)
+        except:
+            # Djongo boolean filter fallback
+            all_objs = list(self.get_queryset())
+            filtered = [obj for obj in all_objs if obj.is_complete]
+            serializer = self.get_serializer(filtered, many=True)
+            return Response(serializer.data)
 
 class AdvFeeViewSet(OwnedQuerysetMixin, viewsets.ModelViewSet):
     queryset = AdvFeeEntry.objects.all().order_by("-created_at")
@@ -137,6 +138,8 @@ def clean_decimal(value):
         return Decimal("0.00")
 
 class DashboardStatsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def get(self, request):
         user = request.user
         is_super = getattr(user, "is_super_role", False) or user.is_superuser
@@ -159,8 +162,8 @@ class DashboardStatsView(APIView):
             adv_total = clean_decimal(adv_total_raw)
             cyb_total = clean_decimal(cyb_total_raw)
         except:
-            adv_total = sum(obj.fees for obj in a_qs)
-            cyb_total = sum(obj.fees for obj in y_qs)
+            adv_total = sum((clean_decimal(obj.fees) for obj in a_qs), Decimal("0.00"))
+            cyb_total = sum((clean_decimal(obj.fees) for obj in y_qs), Decimal("0.00"))
 
         data = {
             "active_count": active_count,
@@ -169,4 +172,6 @@ class DashboardStatsView(APIView):
             "cyber_fee_total": cyb_total,
             "grand_total_fees": adv_total + cyb_total,
         }
-        return Response(DashboardStatsSerializer(data).data)
+
+        serializer = DashboardStatsSerializer(data)
+        return Response(serializer.data)
