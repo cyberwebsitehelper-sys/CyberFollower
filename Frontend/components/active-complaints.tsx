@@ -29,6 +29,7 @@ import type { CyberComplaint } from "@/lib/api-service";
 
 interface ActiveComplaintsProps {
   complaints: CyberComplaint[];
+  initialSearchText?: string;
   onBack: () => void;
   onAdd: (formData: FormData) => Promise<void>;
   onUpdate: (id: string, formData: FormData) => Promise<void>;
@@ -53,6 +54,7 @@ const emptyComplaint = {
 
 export function ActiveComplaints({
   complaints,
+  initialSearchText = "",
   onBack,
   onAdd,
   onUpdate,
@@ -67,6 +69,10 @@ export function ActiveComplaints({
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [closeNocFile, setCloseNocFile] = useState<File | null>(null);
+  const [searchText, setSearchText] = useState(initialSearchText);
+  useEffect(() => {
+    setSearchText(initialSearchText);
+  }, [initialSearchText]);
   const [pendingAction, setPendingAction] = useState<"add" | "edit" | "complete" | "delete" | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -355,6 +361,28 @@ export function ActiveComplaints({
     </div>
   );
 
+  const filteredComplaints = complaints.filter((c) => {
+    const q = searchText.trim().toLowerCase();
+    if (!q) return true;
+    const haystack = [
+      c.bank_name,
+      c.ack_number,
+      c.ifsc_code,
+      c.state_name,
+      c.district,
+      c.layer,
+      String(c.txn_amount),
+      String(c.dispute_amount),
+      c.utr_number || "",
+      c.police_station || "",
+      c.vendor_name || "",
+      c.is_complete ? "complete" : "active",
+    ]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(q);
+  });
+
   return (
     <div className="min-h-screen bg-[#f0f2f5]">
       <header
@@ -396,8 +424,14 @@ export function ActiveComplaints({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-lg font-bold text-gray-800">Cyber Complaints Tracker</h1>
-            <p className="text-xs text-gray-500">Managing {complaints.length} pending investigation cases</p>
+            <p className="text-xs text-gray-500">Managing {filteredComplaints.length} pending investigation cases</p>
           </div>
+          <Input
+            placeholder="Search For FindOut Details...."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="sm:max-w-md bg-gray-50 border-gray-200 text-gray-800"
+          />
           <Button
             onClick={() => {
               setFormData(emptyComplaint);
@@ -417,7 +451,7 @@ export function ActiveComplaints({
           <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 flex items-center justify-between overflow-hidden relative group">
              <div className="z-10">
                 <p className="text-xs font-bold text-gray-400 uppercase">Total Active</p>
-                <p className="text-3xl font-black text-gray-800">{complaints.length}</p>
+                <p className="text-3xl font-black text-gray-800">{filteredComplaints.length}</p>
               </div>
               <AlertCircle className="w-12 h-12 text-yellow-500/10 absolute right-[-4px] bottom-[-4px] group-hover:scale-110 transition-transform" />
           </div>
@@ -425,7 +459,7 @@ export function ActiveComplaints({
              <div className="z-10">
                 <p className="text-xs font-bold text-gray-400 uppercase">Processing</p>
                 <p className="text-3xl font-black text-blue-600">
-                  {complaints.filter(c => !c.noc_file).length}
+                  {filteredComplaints.filter(c => !c.noc_file).length}
                 </p>
               </div>
               <Upload className="w-12 h-12 text-blue-500/10 absolute right-[-4px] bottom-[-4px] group-hover:scale-110 transition-transform" />
@@ -434,7 +468,7 @@ export function ActiveComplaints({
              <div className="z-10">
                 <p className="text-xs font-bold text-gray-400 uppercase">Ready to Close</p>
                 <p className="text-3xl font-black text-green-600">
-                  {complaints.filter(c => c.noc_file).length}
+                  {filteredComplaints.filter(c => c.noc_file).length}
                 </p>
               </div>
               <Check className="w-12 h-12 text-green-500/10 absolute right-[-4px] bottom-[-4px] group-hover:scale-110 transition-transform" />
@@ -457,6 +491,7 @@ export function ActiveComplaints({
                     "Amount (TXN/DISP)",
                     "UTR / Station / Vendor",
                     "NOC Status",
+                    "Status",
                     "Manage",
                   ].map((header) => (
                     <th
@@ -470,7 +505,7 @@ export function ActiveComplaints({
               </thead>
               <tbody className="divide-y divide-gray-100">
                 <AnimatePresence mode="popLayout">
-                  {complaints.map((complaint, index) => {
+                  {filteredComplaints.map((complaint, index) => {
                     const rowId = getRowId(complaint);
                     return (
                     <motion.tr
@@ -520,11 +555,17 @@ export function ActiveComplaints({
                         )}
                       </td>
                       <td className="px-4 py-4">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold bg-yellow-50 text-yellow-700 border border-yellow-200">
+                          {complaint.is_complete ? "COMPLETE" : "ACTIVE"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleEditClick(complaint)}
+                            disabled={complaint.is_complete}
                             className="h-8 w-8 text-gray-400 hover:text-blue-600 hover:bg-blue-50"
                           >
                             <Edit className="w-4 h-4" />
@@ -553,7 +594,7 @@ export function ActiveComplaints({
                 </AnimatePresence>
               </tbody>
             </table>
-            {complaints.length === 0 && (
+            {filteredComplaints.length === 0 && (
               <div className="text-center py-20 bg-gray-50/50">
                 <AlertCircle className="w-16 h-16 mx-auto mb-4 text-gray-200" />
                 <h3 className="text-lg font-bold text-gray-400">Clear Records</h3>

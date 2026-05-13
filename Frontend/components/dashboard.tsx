@@ -16,6 +16,7 @@ import {
   TrendingUp,
   TrendingDown,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 export type DashboardView =
   | "dashboard"
@@ -28,6 +29,7 @@ export type DashboardView =
 interface DashboardProps {
   onNavigate: (view: DashboardView) => void;
   onLogout: () => void;
+  onSearch?: (value: string) => void;
   stats: {
     activeCount: number;
     closedCount: number;
@@ -36,7 +38,10 @@ interface DashboardProps {
   };
 }
 
-export function Dashboard({ onNavigate, onLogout, stats }: DashboardProps) {
+export function Dashboard({ onNavigate, onLogout, onSearch, stats }: DashboardProps) {
+  const handleSearch = (value: string) => {
+    if (onSearch) onSearch(value);
+  };
   const balanceCards = [
     {
       title: "Active Complaints",
@@ -167,6 +172,13 @@ export function Dashboard({ onNavigate, onLogout, stats }: DashboardProps) {
           <div>
             <h1 className="text-lg font-semibold text-gray-800">Hi, Super welcome back!</h1>
             <p className="text-sm text-gray-500">Dashboard &gt; Dashboard</p>
+          </div>
+          <div className="w-full max-w-md mx-4">
+            <Input
+              placeholder="Search For FindOut Details..."
+              onChange={(e) => handleSearch(e.target.value)}
+              className="bg-gray-50 border-gray-200 text-gray-800"
+            />
           </div>
           <div className="hidden md:flex items-center gap-6">
             <div className="text-right">
@@ -342,6 +354,13 @@ export function Dashboard({ onNavigate, onLogout, stats }: DashboardProps) {
           </div>
         </motion.div>
       </div>
+
+      <footer className="mt-8 border-t border-white/20 bg-[#2c3e50]">
+        <div className="px-6 py-4 text-xs text-white/85 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <p>Cyber Complaint Management System</p>
+          <p>Secure Records | Live Monitoring | © {new Date().getFullYear()} | Made By : DONCHAN</p>
+        </div>
+      </footer>
     </div>
   );
 }

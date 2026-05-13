@@ -17,6 +17,7 @@ import { toast } from "sonner";
 function HomeContent() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentView, setCurrentView] = useState<DashboardView>("dashboard");
+  const [dashboardSearchText, setDashboardSearchText] = useState("");
   const {
     activeComplaints,
     closedComplaints,
@@ -73,6 +74,12 @@ function HomeContent() {
     if (view === "active-complaints" || view === "closed-complaints" || view === "employee-data") {
       void reloadAll();
     }
+  };
+
+  const handleDashboardSearch = (value: string) => {
+    setDashboardSearchText(value);
+    setCurrentView("active-complaints");
+    void reloadAll();
   };
 
   const handleAddComplaint = async (formData: FormData) => {
@@ -161,6 +168,7 @@ function HomeContent() {
           <Dashboard
             onNavigate={handleNavigate}
             onLogout={handleLogout}
+            onSearch={handleDashboardSearch}
             stats={{
               activeCount: activeComplaints.length,
               closedCount: closedComplaints.length,
@@ -173,6 +181,7 @@ function HomeContent() {
         {currentView === "active-complaints" && (
           <ActiveComplaints
             complaints={activeComplaints}
+            initialSearchText={dashboardSearchText}
             onBack={() => setCurrentView("dashboard")}
             onAdd={handleAddComplaint}
             onUpdate={handleUpdateComplaint}
@@ -218,4 +227,3 @@ export default function Home() {
     </DataStoreProvider>
   );
 }
-
