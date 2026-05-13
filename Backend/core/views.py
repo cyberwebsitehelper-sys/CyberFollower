@@ -22,6 +22,63 @@ from .serializers import (
     DashboardStatsSerializer,
 )
 
+def has_uploaded_file(file_obj):
+    if not file_obj:
+        return False
+    size = getattr(file_obj, "size", None)
+    if size is None:
+        return True
+    return size > 0
+
+def complaint_has_noc(complaint):
+    file_obj = getattr(complaint, "noc_file", None)
+    if not file_obj:
+        return False
+    file_name = getattr(file_obj, "name", None)
+    if file_name:
+        return bool(str(file_name).strip())
+    return True
+
+def complaint_ready_for_close(complaint):
+    required_text_fields = [
+        "bank_name",
+        "ack_number",
+        "ifsc_code",
+        "state_name",
+        "district",
+        "layer",
+    ]
+    for field in required_text_fields:
+        value = getattr(complaint, field, "")
+        if not str(value or "").strip():
+            return False
+
+    try:
+        txn_amount = Decimal(str(getattr(complaint, "txn_amount", 0) or 0))
+        dispute_amount = Decimal(str(getattr(complaint, "dispute_amount", 0) or 0))
+    except Exception:
+        return False
+
+    if txn_amount <= 0 or dispute_amount < 0:
+        return False
+
+    return complaint_has_noc(complaint)
+
+def extract_password_confirm(request):
+    pwd = request.data.get("password_confirm")
+    if not pwd:
+        pwd = request.query_params.get("password_confirm")
+    return pwd
+
+def persist_noc_file(complaint, uploaded_file):
+    if not has_uploaded_file(uploaded_file):
+        return
+    try:
+        uploaded_file.seek(0)
+    except Exception:
+        pass
+    complaint.noc_file.save(uploaded_file.name, uploaded_file, save=False)
+
 def is_marked_complete(value):
     if isinstance(value, bool):
         return value
@@ -96,49 +153,37 @@ class CyberComplaintViewSet(OwnedQuerysetMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # Prefer request.FILES for djongo/file-field reliability.
         noc_file = self.request.FILES.get('noc_file') or serializer.validated_data.get('noc_file')
-        is_complete = bool(noc_file)
-        completed_at = timezone.now() if is_complete else None
+        valid_noc_file = noc_file if has_uploaded_file(noc_file) else None
+        instance = serializer.save(employee=self.request.user)
+        # Fallback for environments where serializer-save may not persist file.
+        if valid_noc_file and not getattr(instance, "noc_file", None):
+            persist_noc_file(instance, valid_noc_file)
+            instance.save()
 
-        instance = serializer.save(
-            employee=self.request.user,
-            is_complete=is_complete,
-            completed_at=completed_at
-        )
-        # Some djongo setups do not persist FileField reliably via serializer kwargs.
-        if noc_file and not getattr(instance, "noc_file", None):
-            instance.noc_file = noc_file
-            instance.save(update_fields=["noc_file"])
+        is_complete = complaint_ready_for_close(instance)
+        instance.is_complete = is_complete
+        instance.completed_at = timezone.now() if is_complete else None
+        instance.save()
 
     def perform_update(self, serializer):
         # Update logic to handle auto-completion
         instance = self.get_object()
         # If new file is uploaded OR it already had a file
         noc_file = self.request.FILES.get('noc_file') or serializer.validated_data.get('noc_file')
-        is_complete_from_request = str(self.request.data.get("is_complete", "")).lower() in ("1", "true", "yes", "on")
+        valid_noc_file = noc_file if has_uploaded_file(noc_file) else None
+        updated_instance = serializer.save()
+        # Fallback only when file did not persist after serializer.save().
+        if valid_noc_file and not getattr(updated_instance, "noc_file", None):
+            persist_noc_file(updated_instance, valid_noc_file)
+            updated_instance.save()
 
-        is_complete = is_marked_complete(instance.is_complete)
-        completed_at = instance.completed_at
-
-        if noc_file:
-            is_complete = True
-            if not completed_at:
-                completed_at = timezone.now()
-        elif is_complete_from_request and not is_complete:
-            is_complete = True
-            completed_at = timezone.now()
-
-        updated_instance = serializer.save(
-            is_complete=is_complete,
-            completed_at=completed_at
-        )
-        # Force file persistence in djongo where multipart PATCH can be inconsistent.
-        if noc_file:
-            updated_instance.noc_file = noc_file
-            update_fields = ["noc_file", "is_complete", "completed_at"]
-            updated_instance.save(update_fields=update_fields)
+        should_complete = complaint_ready_for_close(updated_instance)
+        updated_instance.is_complete = should_complete
+        updated_instance.completed_at = timezone.now() if should_complete else None
+        updated_instance.save()
 
     def destroy(self, request, *args, **kwargs):
-        pwd = request.data.get("password_confirm")
+        pwd = extract_password_confirm(request)
         if not pwd or not request.user.check_password(pwd):
             return Response({"detail": "Password confirmation failed to delete."}, status=status.HTTP_400_BAD_REQUEST)
         return super().destroy(request, *args, **kwargs)
@@ -146,9 +191,13 @@ class CyberComplaintViewSet(OwnedQuerysetMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def close(self, request, pk=None):
         complaint = self.get_object()
-        pwd = request.data.get("password_confirm")
+        pwd = extract_password_confirm(request)
         if not pwd or not request.user.check_password(pwd):
             return Response({"detail": "Password confirmation failed."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Closing requires all required data + NOC.
+        if not complaint_ready_for_close(complaint):
+            return Response({"detail": "Complete required fields and upload NOC before closing."}, status=status.HTTP_400_BAD_REQUEST)
 
         complaint.is_complete = True
         complaint.completed_at = timezone.now()
@@ -158,19 +207,18 @@ class CyberComplaintViewSet(OwnedQuerysetMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='upload-noc')
     def upload_noc(self, request, pk=None):
         complaint = self.get_object()
-        pwd = request.data.get("password_confirm")
+        pwd = extract_password_confirm(request)
         if not pwd or not request.user.check_password(pwd):
             return Response({"detail": "Password confirmation failed."}, status=status.HTTP_400_BAD_REQUEST)
 
         noc_file = request.FILES.get("noc_file")
-        if not noc_file:
+        if not has_uploaded_file(noc_file):
             return Response({"detail": "noc_file is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        complaint.noc_file = noc_file
-        complaint.is_complete = True
-        if not complaint.completed_at:
-            complaint.completed_at = timezone.now()
-        complaint.save(update_fields=["noc_file", "is_complete", "completed_at"])
+        persist_noc_file(complaint, noc_file)
+        complaint.is_complete = complaint_ready_for_close(complaint)
+        complaint.completed_at = timezone.now() if complaint.is_complete else None
+        complaint.save()
 
         return Response(self.get_serializer(complaint).data, status=status.HTTP_200_OK)
 
@@ -178,14 +226,16 @@ class CyberComplaintViewSet(OwnedQuerysetMixin, viewsets.ModelViewSet):
     def active(self, request):
         # Keep filtering in Python: djongo can fail on OR/isnull SQL translation.
         all_objs = list(self.get_queryset())
-        filtered = [obj for obj in all_objs if not is_marked_complete(getattr(obj, "is_complete", False))]
+        # Active = anything not fully ready for close.
+        filtered = [obj for obj in all_objs if not complaint_ready_for_close(obj)]
         serializer = self.get_serializer(filtered, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def closed(self, request):
         all_objs = list(self.get_queryset())
-        filtered = [obj for obj in all_objs if is_marked_complete(getattr(obj, "is_complete", False))]
+        # Closed = fully completed with all required data + NOC.
+        filtered = [obj for obj in all_objs if complaint_ready_for_close(obj)]
         serializer = self.get_serializer(filtered, many=True)
         return Response(serializer.data)
 

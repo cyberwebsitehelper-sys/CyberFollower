@@ -1,27 +1,37 @@
 const envUrl = process.env.NEXT_PUBLIC_API_URL;
-const BASE_URL = (envUrl && envUrl.trim() !== "")
+const API_BASE_URL = (envUrl && envUrl.trim() !== "")
   ? envUrl.trim().replace(/\/+$/, '')
-  : 'http://127.0.0.1:8000';
+  : (
+      typeof window !== "undefined"
+        ? `${window.location.protocol}//${window.location.hostname}:8000`
+        : "http://127.0.0.1:8000"
+    );
 
 let refreshPromise: Promise<string | null> | null = null;
+let accessToken: string | null = null;
+let refreshTokenValue: string | null = null;
+
+function setSessionTokens(access: string | null, refresh: string | null) {
+  accessToken = access || null;
+  refreshTokenValue = refresh || null;
+}
 
 async function refreshAccessToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
-  const refreshToken = localStorage.getItem('refresh_token');
-  if (!refreshToken) return null;
+  if (!refreshTokenValue) return null;
 
   const subPath = 'api/auth/refresh/';
-  const finalUrl = `${BASE_URL}/${subPath}`;
+  const finalUrl = `${API_BASE_URL}/${subPath}`;
   const response = await fetch(finalUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh: refreshToken }),
+    body: JSON.stringify({ refresh: refreshTokenValue }),
   });
 
   if (!response.ok) return null;
   const data = await response.json();
   if (data?.access) {
-    localStorage.setItem('access_token', data.access);
+    accessToken = data.access;
     return data.access;
   }
   return null;
@@ -29,14 +39,12 @@ async function refreshAccessToken(): Promise<string | null> {
 
 function clearSessionAndRedirect() {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
-  localStorage.removeItem('user');
+  setSessionTokens(null, null);
   window.location.href = '/';
 }
 
 async function fetchWithAuth(url: string, options: RequestInit = {}, isRetry = false) {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  const token = typeof window !== 'undefined' ? accessToken : null;
 
   const headers: HeadersInit = {
     ...options.headers,
@@ -44,7 +52,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}, isRetry = f
   };
 
   const subPath = url.replace(/^\/+/, '');
-  const finalUrl = `${BASE_URL}/${subPath}`;
+  const finalUrl = `${API_BASE_URL}/${subPath}`;
 
   console.log(`[API] ${options.method || 'GET'} ${finalUrl}`);
 
@@ -68,7 +76,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}, isRetry = f
     clearSessionAndRedirect();
     throw new Error("Session expired. Please login again.");
   }
-
+  
   if (!response.ok) {
     let errorMsg = `Error ${response.status}: ${response.statusText}`;
     let errorData = null;
@@ -76,7 +84,21 @@ async function fetchWithAuth(url: string, options: RequestInit = {}, isRetry = f
       const contentType = response.headers.get("content-type");
       if (contentType && contentType.includes("application/json")) {
         errorData = await response.json();
-        errorMsg = errorData.detail || errorData.error || (typeof errorData === 'object' ? JSON.stringify(errorData) : errorMsg);
+        if (errorData?.detail) {
+          errorMsg = errorData.detail;
+        } else if (errorData?.error) {
+          errorMsg = errorData.error;
+        } else if (typeof errorData === "object" && errorData !== null) {
+          const firstKey = Object.keys(errorData)[0];
+          const firstVal = firstKey ? errorData[firstKey] : null;
+          if (Array.isArray(firstVal) && firstVal.length > 0) {
+            errorMsg = String(firstVal[0]);
+          } else if (typeof firstVal === "string" && firstVal.trim() !== "") {
+            errorMsg = firstVal;
+          } else {
+            errorMsg = JSON.stringify(errorData);
+          }
+        }
       }
     } catch (e) {}
 
@@ -125,3 +147,6 @@ export const api = {
     });
   },
 };
+
+export { API_BASE_URL };
+export { setSessionTokens };

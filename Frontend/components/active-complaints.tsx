@@ -32,7 +32,7 @@ interface ActiveComplaintsProps {
   onBack: () => void;
   onAdd: (formData: FormData) => Promise<void>;
   onUpdate: (id: string, formData: FormData) => Promise<void>;
-  onMoveToClose: (id: string, passwordConfirm: string) => Promise<void>;
+  onMoveToClose: (id: string, passwordConfirm: string, nocFile?: File | null) => Promise<void>;
   onDelete: (id: string, passwordConfirm: string) => Promise<void>;
 }
 
@@ -66,6 +66,7 @@ export function ActiveComplaints({
   const [formData, setFormData] = useState(emptyComplaint);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [closeNocFile, setCloseNocFile] = useState<File | null>(null);
   const [pendingAction, setPendingAction] = useState<"add" | "edit" | "complete" | "delete" | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -137,14 +138,22 @@ export function ActiveComplaints({
         setShowAddModal(false);
         setFormData(emptyComplaint);
       } else if (pendingAction === "edit" && selectedComplaint) {
+        if (!rowId) throw new Error("Invalid complaint ID for update.");
         await onUpdate(rowId, createFormData(password));
         setShowEditModal(false);
         setSelectedComplaint(null);
         setFormData(emptyComplaint);
       } else if (pendingAction === "complete" && selectedComplaint) {
-        await onMoveToClose(rowId, password);
+        if (!rowId) throw new Error("Invalid complaint ID for close.");
+        if (!closeNocFile) {
+          throw new Error("Please select NOC file before closing.");
+        }
+        await onMoveToClose(rowId, password, closeNocFile);
         setSelectedComplaint(null);
+        setFormData(emptyComplaint);
+        setCloseNocFile(null);
       } else if (pendingAction === "delete" && selectedComplaint) {
+        if (!rowId) throw new Error("Invalid complaint ID for delete.");
         await onDelete(rowId, password);
         setSelectedComplaint(null);
       }
@@ -189,6 +198,7 @@ export function ActiveComplaints({
 
   const handleCompleteClick = (complaint: CyberComplaint) => {
     setSelectedComplaint(complaint);
+    setCloseNocFile(null);
     setPendingAction("complete");
     setShowPasswordModal(true);
   };
@@ -635,6 +645,22 @@ export function ActiveComplaints({
             </DialogDescription>
           </div>
           <div className="p-6 space-y-4">
+            {pendingAction === "complete" && (
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-gray-500 uppercase">NOC File *</label>
+                <Input
+                  type="file"
+                  onChange={(e) => setCloseNocFile(e.target.files?.[0] || null)}
+                  className="bg-gray-50 border-gray-200 text-gray-800 cursor-pointer"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                />
+                {closeNocFile && (
+                  <p className="text-[10px] text-green-600 font-bold flex items-center gap-1 mt-1">
+                    <FileCheck className="w-3 h-3" /> READY: {closeNocFile.name}
+                  </p>
+                )}
+              </div>
+            )}
             <Input
               id="pass-input"
               type="password"
@@ -666,6 +692,7 @@ export function ActiveComplaints({
                   setShowPasswordModal(false);
                   setPassword("");
                   setPasswordError("");
+                  setCloseNocFile(null);
                 }}
                 className="text-gray-400 font-bold hover:text-gray-600"
               >

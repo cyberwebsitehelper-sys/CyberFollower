@@ -1,8 +1,4 @@
-import { api } from './api-client';
-const envUrl = process.env.NEXT_PUBLIC_API_URL;
-const API_BASE_URL = (envUrl && envUrl.trim() !== "")
-  ? envUrl.trim().replace(/\/+$/, '')
-  : 'http://127.0.0.1:8000';
+import { api, API_BASE_URL, setSessionTokens } from './api-client';
 
 export interface CyberComplaint {
   id: string;
@@ -60,8 +56,41 @@ const resolveFileUrl = (value: string | null): string | null => {
   return `${API_BASE_URL}${normalizedPath}`;
 };
 
+const normalizeIdValue = (raw: any): string => {
+  if (raw === null || raw === undefined) return "";
+  if (typeof raw === "string") {
+    const s = raw.trim();
+    if (!s) return "";
+    if (s.startsWith("{") && s.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(s);
+        return normalizeIdValue(parsed);
+      } catch {
+        return s;
+      }
+    }
+    return s;
+  }
+  if (typeof raw === "number") return String(raw);
+  if (typeof raw === "object") {
+    return String(
+      raw.$oid ??
+      raw.oid ??
+      raw.id ??
+      raw.pk ??
+      raw._id?.$oid ??
+      raw._id ??
+      ""
+    ).trim();
+  }
+  return String(raw).trim();
+};
+
+const encodeEntityId = (id: any): string => encodeURIComponent(normalizeIdValue(id));
+
 const normalizeComplaint = (item: CyberComplaint): CyberComplaint => ({
   ...item,
+  id: normalizeIdValue((item as any).id ?? (item as any)._id ?? (item as any).pk),
   noc_file: resolveFileUrl(item.noc_file || item.noc_file_url || null),
 });
 
@@ -69,9 +98,7 @@ export const apiService = {
   login: async (phoneNumber: string, password: string) => {
     const data = await api.post('/api/auth/login/', { phone_number: phoneNumber, password });
     if (data.access) {
-      localStorage.setItem('access_token', data.access);
-      localStorage.setItem('refresh_token', data.refresh);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      setSessionTokens(data.access, data.refresh || null);
     }
     return data;
   },
@@ -93,13 +120,13 @@ export const apiService = {
 
   addComplaint: (formData: FormData) => api.post('/api/complaints/', formData),
 
-  updateComplaint: (id: string, formData: FormData) => api.patch(`/api/complaints/${id}/`, formData),
-  uploadNoc: (id: string, formData: FormData) => api.post(`/api/complaints/${id}/upload-noc/`, formData),
+  updateComplaint: (id: string, formData: FormData) => api.patch(`/api/complaints/${encodeEntityId(id)}/`, formData),
+  uploadNoc: (id: string, formData: FormData) => api.post(`/api/complaints/${encodeEntityId(id)}/upload-noc/`, formData),
 
   closeComplaint: (id: string, passwordConfirm: string) =>
-    api.post(`/api/complaints/${id}/close/`, { password_confirm: passwordConfirm }),
+    api.post(`/api/complaints/${encodeEntityId(id)}/close/`, { password_confirm: passwordConfirm }),
 
-  deleteComplaint: (id: string, passwordConfirm?: string) => api.delete(`/api/complaints/${id}/`, { password_confirm: passwordConfirm }),
+  deleteComplaint: (id: string, passwordConfirm?: string) => api.delete(`/api/complaints/${encodeEntityId(id)}/`, { password_confirm: passwordConfirm }),
 
   getAdvEntries: (): Promise<AdvEntry[]> => api.get('/api/fees/adv/'),
 

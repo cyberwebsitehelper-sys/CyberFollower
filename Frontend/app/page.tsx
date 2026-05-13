@@ -10,6 +10,7 @@ import { EmployeeData } from "@/components/employee-data";
 import { FeesManagement } from "@/components/fees-management";
 import { HistoryAnalytics } from "@/components/history-analytics";
 import { apiService, type CyberComplaint, type AdvEntry, type CyberEntry, type DashboardStats } from "@/lib/api-service";
+import { setSessionTokens } from "@/lib/api-client";
 import { toast } from "sonner";
 
 export default function Home() {
@@ -28,18 +29,13 @@ export default function Home() {
   });
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      setIsLoggedIn(true);
-      refreshData();
-    }
+    // No local persistence: session is in-memory only.
   }, []);
 
   const refreshData = async () => {
     try {
       const results = await Promise.allSettled([
-        apiService.getComplaints('active'),
-        apiService.getComplaints('closed'),
+        apiService.getComplaints('all'),
         apiService.getAdvEntries(),
         apiService.getCyberEntries(),
         apiService.getStats(),
@@ -50,12 +46,16 @@ export default function Home() {
         return Array.isArray(res.value) ? res.value : res.value?.results || res.value?.data || [];
       };
 
-      setActiveComplaints(extractData(results[0]));
-      setClosedComplaints(extractData(results[1]));
-      setAdvEntries(extractData(results[2]));
-      setCyberEntries(extractData(results[3]));
-      if (results[4].status === 'fulfilled' && results[4].value) {
-        setStats(results[4].value);
+      const allComplaints = extractData(results[0]) as CyberComplaint[];
+      const activeRows = allComplaints.filter((c) => !c.is_complete || !c.noc_file);
+      const closedRows = allComplaints.filter((c) => c.is_complete && !!c.noc_file);
+
+      setActiveComplaints(activeRows);
+      setClosedComplaints(closedRows);
+      setAdvEntries(extractData(results[1]));
+      setCyberEntries(extractData(results[2]));
+      if (results[3].status === 'fulfilled' && results[3].value) {
+        setStats(results[3].value);
       }
     } catch (error) {
       console.error("Failed to fetch data", error);
@@ -80,9 +80,7 @@ export default function Home() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
+    setSessionTokens(null, null);
     setIsLoggedIn(false);
     setCurrentView("dashboard");
     toast.info("Logged out");
@@ -105,19 +103,9 @@ export default function Home() {
     try {
       const nocFile = formData.get("noc_file");
       const hasNocFile = !!(nocFile && typeof nocFile !== 'string' && nocFile.size > 0);
-
-      if (hasNocFile) {
-        const nonFileFormData = new FormData();
-        formData.forEach((value, key) => {
-          if (key === "noc_file" || key === "is_complete") return;
-          nonFileFormData.append(key, value);
-        });
-
-        await apiService.updateComplaint(id, nonFileFormData);
-        await apiService.uploadNoc(id, formData);
-      } else {
-        await apiService.updateComplaint(id, formData);
-      }
+      // Backend perform_update already supports multipart PATCH with noc_file.
+      // Keep this as one request to avoid split-update failure cases.
+      await apiService.updateComplaint(id, formData);
 
       refreshData();
       if (hasNocFile) {
@@ -133,11 +121,18 @@ export default function Home() {
     }
   };
 
-  const handleMoveToClose = async (id: string, passwordConfirm: string) => {
+  const handleMoveToClose = async (id: string, passwordConfirm: string, nocFile?: File | null) => {
     try {
-      await apiService.closeComplaint(id, passwordConfirm);
+      if (nocFile) {
+        const formData = new FormData();
+        formData.append("noc_file", nocFile);
+        formData.append("password_confirm", passwordConfirm);
+        await apiService.uploadNoc(id, formData);
+      } else {
+        await apiService.closeComplaint(id, passwordConfirm);
+      }
       refreshData();
-      toast.success("Complaint closed successfully");
+      toast.success(nocFile ? "NOC uploaded and complaint closed successfully" : "Complaint closed successfully");
     } catch (error: any) {
       console.error("Close complaint error:", error);
       const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error";
