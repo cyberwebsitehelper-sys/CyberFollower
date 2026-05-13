@@ -1,2 +1,0 @@
-cyberwebsitehelper_db_user=SnBZRfcAYcbmJJRE
-MongoDBURI=mongodb+srv://cyberwebsitehelper_db_user:SnBZRfcAYcbmJJRE@cluster0.biprnsh.mongodb.net/?appName=Cluster0

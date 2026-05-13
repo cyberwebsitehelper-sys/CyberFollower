@@ -1,11 +1,9 @@
 const envUrl = process.env.NEXT_PUBLIC_API_URL;
+const ACCESS_TOKEN_KEY = "cf_access_token";
+const REFRESH_TOKEN_KEY = "cf_refresh_token";
 const API_BASE_URL = (envUrl && envUrl.trim() !== "")
   ? envUrl.trim().replace(/\/+$/, '')
-  : (
-      typeof window !== "undefined"
-        ? `${window.location.protocol}//${window.location.hostname}:8000`
-        : "http://127.0.0.1:8000"
-    );
+  : "";
 
 let refreshPromise: Promise<string | null> | null = null;
 let accessToken: string | null = null;
@@ -14,6 +12,26 @@ let refreshTokenValue: string | null = null;
 function setSessionTokens(access: string | null, refresh: string | null) {
   accessToken = access || null;
   refreshTokenValue = refresh || null;
+  if (typeof window !== "undefined") {
+    if (accessToken) {
+      window.localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+    } else {
+      window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+    }
+    if (refreshTokenValue) {
+      window.localStorage.setItem(REFRESH_TOKEN_KEY, refreshTokenValue);
+    } else {
+      window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+    }
+  }
+}
+
+function initSessionFromStorage() {
+  if (typeof window === "undefined") return;
+  const storedAccess = window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  const storedRefresh = window.localStorage.getItem(REFRESH_TOKEN_KEY);
+  accessToken = storedAccess || null;
+  refreshTokenValue = storedRefresh || null;
 }
 
 async function refreshAccessToken(): Promise<string | null> {
@@ -31,7 +49,7 @@ async function refreshAccessToken(): Promise<string | null> {
   if (!response.ok) return null;
   const data = await response.json();
   if (data?.access) {
-    accessToken = data.access;
+    setSessionTokens(data.access, refreshTokenValue);
     return data.access;
   }
   return null;
@@ -41,6 +59,10 @@ function clearSessionAndRedirect() {
   if (typeof window === 'undefined') return;
   setSessionTokens(null, null);
   window.location.href = '/';
+}
+
+if (typeof window !== "undefined") {
+  initSessionFromStorage();
 }
 
 async function fetchWithAuth(url: string, options: RequestInit = {}, isRetry = false) {
@@ -150,3 +172,4 @@ export const api = {
 
 export { API_BASE_URL };
 export { setSessionTokens };
+export { initSessionFromStorage };

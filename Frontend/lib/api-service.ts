@@ -46,14 +46,47 @@ export interface DashboardStats {
   grand_total_fees: number;
 }
 
+export interface Employee {
+  id: string;
+  phone_number: string;
+  full_name: string;
+  is_super_role: boolean;
+  is_active: boolean;
+}
+
 const resolveFileUrl = (value: string | null): string | null => {
   if (!value) return null;
   if (/^https?:\/\//i.test(value)) return value;
   let normalizedPath = value.startsWith('/') ? value : `/${value}`;
   if (normalizedPath.startsWith('/noc/')) {
     normalizedPath = `/media${normalizedPath}`;
+  } else if (!normalizedPath.startsWith('/media/')) {
+    normalizedPath = `/media${normalizedPath}`;
   }
   return `${API_BASE_URL}${normalizedPath}`;
+};
+
+const isTruthyLike = (value: unknown): boolean => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const s = value.trim().toLowerCase();
+    if (!s) return false;
+    return ["1", "true", "yes", "y", "on"].includes(s);
+  }
+  return Boolean(value);
+};
+
+const extractFileValue = (item: any): string | null => {
+  const raw = item?.noc_file ?? item?.noc_file_url ?? null;
+  if (typeof raw === "string") return raw.trim() || null;
+  if (raw && typeof raw === "object") {
+    const v = raw.url ?? raw.path ?? raw.name ?? raw.file ?? null;
+    if (typeof v === "string") return v.trim() || null;
+  }
+  if (typeof item?.noc_file_url === "string" && item.noc_file_url.trim()) return item.noc_file_url.trim();
+  if (typeof item?.noc_file_name === "string" && item.noc_file_name.trim()) return item.noc_file_name.trim();
+  return null;
 };
 
 const normalizeIdValue = (raw: any): string => {
@@ -88,10 +121,22 @@ const normalizeIdValue = (raw: any): string => {
 
 const encodeEntityId = (id: any): string => encodeURIComponent(normalizeIdValue(id));
 
-const normalizeComplaint = (item: CyberComplaint): CyberComplaint => ({
+const normalizeComplaint = (item: CyberComplaint): CyberComplaint => {
+  const extractedFile = extractFileValue(item);
+  return {
+    ...item,
+    id: normalizeIdValue((item as any).id ?? (item as any)._id ?? (item as any).pk),
+    noc_file: resolveFileUrl(extractedFile),
+    is_complete:
+      isTruthyLike((item as any).is_complete) ||
+      Boolean((item as any).completed_at) ||
+      Boolean(extractedFile),
+  };
+};
+
+const normalizeEmployee = (item: Employee): Employee => ({
   ...item,
   id: normalizeIdValue((item as any).id ?? (item as any)._id ?? (item as any).pk),
-  noc_file: resolveFileUrl(item.noc_file || item.noc_file_url || null),
 });
 
 export const apiService = {
@@ -108,10 +153,10 @@ export const apiService = {
   getComplaints: async (type: 'active' | 'closed' | 'all' = 'all'): Promise<CyberComplaint[]> => {
     const endpoint =
       type === 'active'
-        ? '/api/complaints/active/'
+        ? '/api/complaints/active/?scope=all'
         : type === 'closed'
-          ? '/api/complaints/closed/'
-          : '/api/complaints/';
+          ? '/api/complaints/closed/?scope=all'
+          : '/api/complaints/?scope=all';
 
     const data = await api.get(endpoint);
     const rows = Array.isArray(data) ? data : data?.results || [];
@@ -137,4 +182,18 @@ export const apiService = {
 
   addCyberEntry: (data: { name: string, fees: number, password_confirm: string }) =>
     api.post('/api/fees/cyber/', data),
+
+  getEmployees: async (): Promise<Employee[]> => {
+    const data = await api.get('/api/employees/');
+    const rows = Array.isArray(data) ? data : data?.results || [];
+    return rows.map(normalizeEmployee);
+  },
+
+  createEmployee: (data: { phone_number: string; full_name: string; password: string; is_super_role: boolean }) =>
+    api.post('/api/employees/', data),
+
+  updateEmployee: (id: string, data: Partial<{ phone_number: string; full_name: string; password: string; is_super_role: boolean; is_active: boolean }>) =>
+    api.patch(`/api/employees/${encodeEntityId(id)}/`, data),
+
+  deleteEmployee: (id: string) => api.delete(`/api/employees/${encodeEntityId(id)}/`),
 };
