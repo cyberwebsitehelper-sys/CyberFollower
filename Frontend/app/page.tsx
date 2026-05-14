@@ -106,9 +106,9 @@ function HomeContent() {
     }
   };
 
-  const handleMoveToClose = async (id: string, passwordConfirm: string, nocFile?: File | null) => {
+  const handleMoveToClose = async (id: string, passwordConfirm: string, nocFile?: File | null, comment?: string | null) => {
     try {
-      await closeComplaint(id, passwordConfirm, nocFile);
+      await closeComplaint(id, passwordConfirm, nocFile, comment);
       toast.success(nocFile ? "NOC uploaded and complaint closed successfully" : "Complaint closed successfully");
     } catch (error: any) {
       const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error";

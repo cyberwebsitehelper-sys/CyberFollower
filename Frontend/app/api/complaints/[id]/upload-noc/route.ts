@@ -4,6 +4,11 @@ import { getUserFromRequest } from "@/lib/server/auth";
 import { normalizeComplaintDoc, parseIdFilter } from "@/lib/server/complaints";
 import { uploadToCloudinary } from "@/lib/server/cloudinary";
 
+function parseNullableString(value: FormDataEntryValue | null) {
+  const str = String(value ?? "").trim();
+  return str ? str : null;
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = getUserFromRequest(request);
   if (!user) return NextResponse.json({ detail: "Authentication credentials were not provided." }, { status: 401 });
@@ -19,10 +24,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!user.is_super_role) filter.employee_id = Number(user.id);
   const row = await db.collection("core_cybercomplaint").findOneAndUpdate(
     filter,
-    { $set: { noc_file: uploaded.url, is_complete: true, completed_at: new Date() } },
+    {
+      $set: {
+        noc_file: uploaded.url,
+        is_complete: true,
+        completed_at: new Date(),
+        comment: parseNullableString(form.get("comment")),
+      },
+    },
     { returnDocument: "after" }
   );
   if (!row) return NextResponse.json({ detail: "Not found." }, { status: 404 });
   return NextResponse.json(normalizeComplaintDoc(row));
 }
-

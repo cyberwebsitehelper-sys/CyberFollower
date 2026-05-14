@@ -4,6 +4,11 @@ import { getUserFromRequest } from "@/lib/server/auth";
 import { normalizeComplaintDoc, parseIdFilter } from "@/lib/server/complaints";
 import { uploadToCloudinary } from "@/lib/server/cloudinary";
 
+function parseNullableString(value: FormDataEntryValue | null) {
+  const str = String(value ?? "").trim();
+  return str ? str : null;
+}
+
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = getUserFromRequest(request);
   if (!user) return NextResponse.json({ detail: "Authentication credentials were not provided." }, { status: 401 });
@@ -22,9 +27,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     layer: String(form.get("layer") || ""),
     txn_amount: Number(form.get("txn_amount") || 0),
     dispute_amount: Number(form.get("dispute_amount") || 0),
-    utr_number: String(form.get("utr_number") || ""),
-    police_station: String(form.get("police_station") || ""),
-    vendor_name: String(form.get("vendor_name") || ""),
+    utr_number: parseNullableString(form.get("utr_number")),
+    police_station: parseNullableString(form.get("police_station")),
+    vendor_name: parseNullableString(form.get("vendor_name")),
+    comment: parseNullableString(form.get("comment")),
   };
 
   const noc = form.get("noc_file");
@@ -50,4 +56,3 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   await db.collection("core_cybercomplaint").deleteOne(filter);
   return NextResponse.json({ success: true });
 }
-

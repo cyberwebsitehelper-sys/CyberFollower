@@ -8,9 +8,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!user) return NextResponse.json({ detail: "Authentication credentials were not provided." }, { status: 401 });
   const { id } = await params;
   const db = await getDb();
+  const body = await request.json().catch(() => ({}));
+  const rawComment = typeof body?.comment === "string" ? body.comment.trim() : "";
   const filter: any = parseIdFilter(id);
   if (!user.is_super_role) filter.employee_id = Number(user.id);
-  await db.collection("core_cybercomplaint").updateOne(filter, { $set: { is_complete: true, completed_at: new Date() } });
+  await db.collection("core_cybercomplaint").updateOne(filter, {
+    $set: { is_complete: true, completed_at: new Date(), comment: rawComment || null },
+  });
   return NextResponse.json({ status: "complaint closed" });
 }
-

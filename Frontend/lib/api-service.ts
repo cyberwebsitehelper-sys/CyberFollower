@@ -13,6 +13,7 @@ export interface CyberComplaint {
   utr_number: string;
   police_station: string;
   vendor_name: string;
+  comment: string | null;
   noc_file: string | null;
   noc_file_url?: string | null;
   noc_file_name?: string | null;
@@ -123,9 +124,11 @@ const encodeEntityId = (id: any): string => encodeURIComponent(normalizeIdValue(
 
 const normalizeComplaint = (item: CyberComplaint): CyberComplaint => {
   const extractedFile = extractFileValue(item);
+  const rawComment = (item as any)?.comment;
   return {
     ...item,
     id: normalizeIdValue((item as any).id ?? (item as any)._id ?? (item as any).pk),
+    comment: typeof rawComment === "string" ? (rawComment.trim() || null) : null,
     noc_file: resolveFileUrl(extractedFile),
     is_complete:
       isTruthyLike((item as any).is_complete) ||
@@ -168,8 +171,11 @@ export const apiService = {
   updateComplaint: (id: string, formData: FormData) => api.patch(`/api/complaints/${encodeEntityId(id)}/`, formData),
   uploadNoc: (id: string, formData: FormData) => api.post(`/api/complaints/${encodeEntityId(id)}/upload-noc/`, formData),
 
-  closeComplaint: (id: string, passwordConfirm: string) =>
-    api.post(`/api/complaints/${encodeEntityId(id)}/close/`, { password_confirm: passwordConfirm }),
+  closeComplaint: (id: string, passwordConfirm: string, comment?: string | null) =>
+    api.post(`/api/complaints/${encodeEntityId(id)}/close/`, {
+      password_confirm: passwordConfirm,
+      comment: comment ?? null,
+    }),
 
   deleteComplaint: (id: string, passwordConfirm?: string) => api.delete(`/api/complaints/${encodeEntityId(id)}/`, { password_confirm: passwordConfirm }),
 

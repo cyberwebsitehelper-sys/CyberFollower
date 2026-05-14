@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +34,7 @@ interface ActiveComplaintsProps {
   onBack: () => void;
   onAdd: (formData: FormData) => Promise<void>;
   onUpdate: (id: string, formData: FormData) => Promise<void>;
-  onMoveToClose: (id: string, passwordConfirm: string, nocFile?: File | null) => Promise<void>;
+  onMoveToClose: (id: string, passwordConfirm: string, nocFile?: File | null, comment?: string | null) => Promise<void>;
   onDelete: (id: string, passwordConfirm: string) => Promise<void>;
 }
 
@@ -49,6 +50,7 @@ const emptyComplaint = {
   utr_number: "",
   police_station: "",
   vendor_name: "",
+  comment: "",
   noc_file: null as File | null,
 };
 
@@ -70,6 +72,9 @@ export function ActiveComplaints({
   const [passwordError, setPasswordError] = useState("");
   const [closeNocFile, setCloseNocFile] = useState<File | null>(null);
   const [searchText, setSearchText] = useState(initialSearchText);
+  const [showExcelOptions, setShowExcelOptions] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   useEffect(() => {
     setSearchText(initialSearchText);
   }, [initialSearchText]);
@@ -122,7 +127,7 @@ export function ActiveComplaints({
           hasFile = true;
           data.append(key, value);
         } else {
-          if (value === '' && ['utr_number', 'police_station', 'vendor_name'].includes(key)) return;
+          if (value === '' && ['utr_number', 'police_station', 'vendor_name', 'comment'].includes(key)) return;
           data.append(key, value as any);
         }
       }
@@ -154,7 +159,7 @@ export function ActiveComplaints({
         if (!closeNocFile) {
           throw new Error("Please select NOC file before closing.");
         }
-        await onMoveToClose(rowId, password, closeNocFile);
+        await onMoveToClose(rowId, password, closeNocFile, formData.comment || null);
         setSelectedComplaint(null);
         setFormData(emptyComplaint);
         setCloseNocFile(null);
@@ -192,6 +197,7 @@ export function ActiveComplaints({
       utr_number: complaint.utr_number || "",
       police_station: complaint.police_station || "",
       vendor_name: complaint.vendor_name || "",
+      comment: complaint.comment || "",
       noc_file: null,
     });
     setShowEditModal(true);
@@ -349,7 +355,7 @@ export function ActiveComplaints({
             type="file"
             onChange={handleFileChange}
             className="bg-gray-50 border-gray-200 text-gray-800 cursor-pointer"
-            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+            accept="*/*"
           />
         </div>
         {formData.noc_file && (
@@ -357,6 +363,16 @@ export function ActiveComplaints({
             <FileCheck className="w-3 h-3" /> READY: {formData.noc_file.name}
           </p>
         )}
+      </div>
+      <div className="space-y-1 md:col-span-2">
+        <label className="text-xs font-semibold text-gray-500 uppercase">Comment (Optional)</label>
+        <Textarea
+          id="f13"
+          value={formData.comment}
+          onChange={(e) => handleInputChange("comment", e.target.value)}
+          placeholder="Type comment (optional)"
+          className="bg-gray-50 border-gray-200 text-gray-800 focus:bg-white transition-colors min-h-[90px]"
+        />
       </div>
     </div>
   );
@@ -376,12 +392,81 @@ export function ActiveComplaints({
       c.utr_number || "",
       c.police_station || "",
       c.vendor_name || "",
+      c.comment || "",
       c.is_complete ? "complete" : "active",
     ]
       .join(" ")
       .toLowerCase();
     return haystack.includes(q);
   });
+  const isOpenableFile = (value: string | null | undefined) => !!value && /^https?:\/\//i.test(value);
+
+  const toIsoDate = (value: string | null) => {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toISOString().slice(0, 10);
+  };
+
+  const normalizedRows = filteredComplaints.map((c) => ({
+    "Bank Name": c.bank_name || "",
+    "ACK Number": c.ack_number || "",
+    "IFSC Code": c.ifsc_code || "",
+    "State": c.state_name || "",
+    "District": c.district || "",
+    "Layer": c.layer || "",
+    "TXN Amount": Number(c.txn_amount || 0),
+    "Dispute Amount": Number(c.dispute_amount || 0),
+    "UTR Number": c.utr_number || "",
+    "Police Station": c.police_station || "",
+    "Vendor Name": c.vendor_name || "",
+    "Comment": c.comment || "NULL",
+    "NOC File": c.noc_file || "",
+    "Created At": toIsoDate(c.created_at || null),
+  }));
+
+  const getRowsByDate = () => {
+    if (!fromDate && !toDate) return normalizedRows;
+    return normalizedRows.filter((row) => {
+      const date = String(row["Created At"] || "");
+      if (!date) return false;
+      if (fromDate && date < fromDate) return false;
+      if (toDate && date > toDate) return false;
+      return true;
+    });
+  };
+
+  const toExcelHtml = (rows: Record<string, string | number>[]) => {
+    if (!rows.length) return "<table></table>";
+    const headers = Object.keys(rows[0]);
+    const esc = (v: unknown) =>
+      String(v ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    const head = `<tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr>`;
+    const body = rows
+      .map((row) => `<tr>${headers.map((h) => `<td>${esc(row[h])}</td>`).join("")}</tr>`)
+      .join("");
+    return `<html><head><meta charset="utf-8" /></head><body><table border="1">${head}${body}</table></body></html>`;
+  };
+
+  const downloadBlob = (filename: string, blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportExcel = (rows: Record<string, string | number>[], suffix: string) => {
+    const html = toExcelHtml(rows);
+    downloadBlob(`active-cyber-complaints-${suffix}.xls`, new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" }));
+  };
 
   return (
     <div className="min-h-screen bg-[#f0f2f5]">
@@ -432,19 +517,46 @@ export function ActiveComplaints({
             onChange={(e) => setSearchText(e.target.value)}
             className="sm:max-w-md bg-gray-50 border-gray-200 text-gray-800"
           />
-          <Button
-            onClick={() => {
-              setFormData(emptyComplaint);
-              setShowAddModal(true);
-            }}
-            className="text-white font-bold px-6 shadow-lg transition-transform active:scale-95"
-            style={{ background: "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)" }}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            New Entry
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowExcelOptions((prev) => !prev)}
+              className="font-bold px-4"
+            >
+              Export Excel
+            </Button>
+            <Button
+              onClick={() => {
+                setFormData(emptyComplaint);
+                setShowAddModal(true);
+              }}
+              className="text-white font-bold px-6 shadow-lg transition-transform active:scale-95"
+              style={{ background: "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)" }}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Entry
+            </Button>
+          </div>
         </div>
       </div>
+      {showExcelOptions && (
+        <div className="px-6 pt-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+            <div className="flex flex-col md:flex-row md:items-end gap-3">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">From Date</p>
+                <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">To Date</p>
+                <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+              </div>
+              <Button onClick={() => exportExcel(getRowsByDate(), "date-range")}>Export Date-Range Excel</Button>
+              <Button variant="outline" onClick={() => exportExcel(normalizedRows, "all")}>Export All</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -539,7 +651,7 @@ export function ActiveComplaints({
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        {complaint.noc_file ? (
+                        {complaint.noc_file && isOpenableFile(complaint.noc_file) ? (
                           <a
                             href={complaint.noc_file}
                             target="_blank"
@@ -548,6 +660,10 @@ export function ActiveComplaints({
                           >
                             <FileCheck className="w-3 h-3" /> ATTACHED
                           </a>
+                        ) : complaint.noc_file ? (
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-full border border-amber-200">
+                            <FileCheck className="w-3 h-3" /> LEGACY FILE PATH
+                          </div>
                         ) : (
                           <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 text-red-600 text-[10px] font-bold rounded-full border border-red-100">
                             <FileX className="w-3 h-3" /> NO FILE
@@ -606,9 +722,9 @@ export function ActiveComplaints({
       </div>
 
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="max-w-3xl bg-white border-0 shadow-2xl rounded-2xl overflow-hidden p-0">
+        <DialogContent className="max-w-3xl max-h-[90vh] bg-white border-0 shadow-2xl rounded-2xl overflow-hidden p-0 flex flex-col">
           <div className="h-2 w-full bg-[#e74c3c]"></div>
-          <div className="p-6">
+          <div className="p-6 overflow-y-auto">
             <DialogHeader className="mb-6">
               <DialogTitle className="text-2xl font-black text-gray-800 uppercase tracking-tight">
                 New Complaint Entry
@@ -640,9 +756,9 @@ export function ActiveComplaints({
       </Dialog>
 
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="max-w-3xl bg-white border-0 shadow-2xl rounded-2xl overflow-hidden p-0">
+        <DialogContent className="max-w-3xl max-h-[90vh] bg-white border-0 shadow-2xl rounded-2xl overflow-hidden p-0 flex flex-col">
           <div className="h-2 w-full bg-blue-500"></div>
-          <div className="p-6">
+          <div className="p-6 overflow-y-auto">
             <DialogHeader className="mb-6">
               <DialogTitle className="text-2xl font-black text-gray-800 uppercase tracking-tight">
                 Update Record
@@ -693,7 +809,7 @@ export function ActiveComplaints({
                   type="file"
                   onChange={(e) => setCloseNocFile(e.target.files?.[0] || null)}
                   className="bg-gray-50 border-gray-200 text-gray-800 cursor-pointer"
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  accept="*/*"
                 />
                 {closeNocFile && (
                   <p className="text-[10px] text-green-600 font-bold flex items-center gap-1 mt-1">

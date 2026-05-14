@@ -9,6 +9,11 @@ function parseNumber(value: FormDataEntryValue | null, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function parseNullableString(value: FormDataEntryValue | null) {
+  const str = String(value ?? "").trim();
+  return str ? str : null;
+}
+
 export async function GET(request: NextRequest) {
   const user = getUserFromRequest(request);
   if (!user) return NextResponse.json({ detail: "Authentication credentials were not provided." }, { status: 401 });
@@ -47,9 +52,10 @@ export async function POST(request: NextRequest) {
     layer: String(form.get("layer") || ""),
     txn_amount: parseNumber(form.get("txn_amount")),
     dispute_amount: parseNumber(form.get("dispute_amount")),
-    utr_number: String(form.get("utr_number") || ""),
-    police_station: String(form.get("police_station") || ""),
-    vendor_name: String(form.get("vendor_name") || ""),
+    utr_number: parseNullableString(form.get("utr_number")),
+    police_station: parseNullableString(form.get("police_station")),
+    vendor_name: parseNullableString(form.get("vendor_name")),
+    comment: parseNullableString(form.get("comment")),
     noc_file: nocPath,
     is_complete: !!nocPath,
     created_at: now,
