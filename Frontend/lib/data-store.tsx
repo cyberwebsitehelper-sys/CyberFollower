@@ -13,8 +13,8 @@ type DataStoreContextType = {
   reloadAll: () => Promise<void>;
   addComplaint: (formData: FormData) => Promise<void>;
   updateComplaint: (id: string, formData: FormData) => Promise<void>;
-  closeComplaint: (id: string, passwordConfirm: string, nocFile?: File | null, comment?: string | null) => Promise<void>;
-  deleteComplaint: (id: string, passwordConfirm?: string) => Promise<void>;
+  closeComplaint: (id: string, nocFile?: File | null, comment?: string | null) => Promise<void>;
+  deleteComplaint: (id: string) => Promise<void>;
   addAdvEntry: (data: { name: string; fees: number; password_confirm: string }) => Promise<void>;
   addCyberEntry: (data: { name: string; fees: number; password_confirm: string }) => Promise<void>;
 };
@@ -101,21 +101,20 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     await reloadAll();
   }, [reloadAll]);
 
-  const closeComplaint = useCallback(async (id: string, passwordConfirm: string, nocFile?: File | null, comment?: string | null) => {
+  const closeComplaint = useCallback(async (id: string, nocFile?: File | null, comment?: string | null) => {
     if (nocFile) {
       const formData = new FormData();
       formData.append("noc_file", nocFile);
-      formData.append("password_confirm", passwordConfirm);
       formData.append("comment", comment?.trim() ? comment.trim() : "");
       await apiService.uploadNoc(id, formData);
     } else {
-      await apiService.closeComplaint(id, passwordConfirm, comment);
+      await apiService.closeComplaint(id, comment);
     }
     await reloadAll();
   }, [reloadAll]);
 
-  const deleteComplaint = useCallback(async (id: string, passwordConfirm?: string) => {
-    await apiService.deleteComplaint(id, passwordConfirm);
+  const deleteComplaint = useCallback(async (id: string) => {
+    await apiService.deleteComplaint(id);
     await reloadAll();
   }, [reloadAll]);
 

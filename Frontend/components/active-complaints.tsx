@@ -34,8 +34,8 @@ interface ActiveComplaintsProps {
   onBack: () => void;
   onAdd: (formData: FormData) => Promise<void>;
   onUpdate: (id: string, formData: FormData) => Promise<void>;
-  onMoveToClose: (id: string, passwordConfirm: string, nocFile?: File | null, comment?: string | null) => Promise<void>;
-  onDelete: (id: string, passwordConfirm: string) => Promise<void>;
+  onMoveToClose: (id: string, nocFile?: File | null, comment?: string | null) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }
 
 const emptyComplaint = {
@@ -65,11 +65,9 @@ export function ActiveComplaints({
 }: ActiveComplaintsProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
   const [selectedComplaint, setSelectedComplaint] = useState<CyberComplaint | null>(null);
   const [formData, setFormData] = useState(emptyComplaint);
-  const [password, setPassword] = useState("");
-  const [passwordError, setPasswordError] = useState("");
   const [closeNocFile, setCloseNocFile] = useState<File | null>(null);
   const [searchText, setSearchText] = useState(initialSearchText);
   const [showExcelOptions, setShowExcelOptions] = useState(false);
@@ -78,7 +76,6 @@ export function ActiveComplaints({
   useEffect(() => {
     setSearchText(initialSearchText);
   }, [initialSearchText]);
-  const [pendingAction, setPendingAction] = useState<"add" | "edit" | "complete" | "delete" | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const getRowId = (complaint: any): string => {
@@ -91,7 +88,6 @@ export function ActiveComplaints({
   };
 
   const handleInputChange = (field: string, value: string | number) => {
-    if (passwordError) setPasswordError("");
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -115,7 +111,7 @@ export function ActiveComplaints({
     }
   };
 
-  const createFormData = (passwordConfirm: string) => {
+  const createFormData = () => {
     const data = new FormData();
     let hasFile = false;
 
@@ -132,55 +128,21 @@ export function ActiveComplaints({
         }
       }
     });
-    data.append('password_confirm', passwordConfirm);
     if (hasFile) {
       data.append('is_complete', 'true');
     }
     return data;
   };
 
-  const handlePasswordSubmit = async () => {
+  const handleAddClick = async () => {
     setIsSubmitting(true);
-    setPasswordError("");
     try {
-      const rowId = getRowId(selectedComplaint);
-      if (pendingAction === "add") {
-        await onAdd(createFormData(password));
-        setShowAddModal(false);
-        setFormData(emptyComplaint);
-      } else if (pendingAction === "edit" && selectedComplaint) {
-        if (!rowId) throw new Error("Invalid complaint ID for update.");
-        await onUpdate(rowId, createFormData(password));
-        setShowEditModal(false);
-        setSelectedComplaint(null);
-        setFormData(emptyComplaint);
-      } else if (pendingAction === "complete" && selectedComplaint) {
-        if (!rowId) throw new Error("Invalid complaint ID for close.");
-        if (!closeNocFile) {
-          throw new Error("Please select NOC file before closing.");
-        }
-        await onMoveToClose(rowId, password, closeNocFile, formData.comment || null);
-        setSelectedComplaint(null);
-        setFormData(emptyComplaint);
-        setCloseNocFile(null);
-      } else if (pendingAction === "delete" && selectedComplaint) {
-        if (!rowId) throw new Error("Invalid complaint ID for delete.");
-        await onDelete(rowId, password);
-        setSelectedComplaint(null);
-      }
-      setShowPasswordModal(false);
-      setPassword("");
-      setPendingAction(null);
-    } catch (err: any) {
-      setPasswordError(err?.message || "Action failed. Check password.");
+      await onAdd(createFormData());
+      setShowAddModal(false);
+      setFormData(emptyComplaint);
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleAddClick = () => {
-    setPendingAction("add");
-    setShowPasswordModal(true);
   };
 
   const handleEditClick = (complaint: CyberComplaint) => {
@@ -203,22 +165,56 @@ export function ActiveComplaints({
     setShowEditModal(true);
   };
 
-  const handleEditSubmit = () => {
-    setPendingAction("edit");
-    setShowPasswordModal(true);
+  const handleEditSubmit = async () => {
+    if (!selectedComplaint) return;
+    const rowId = getRowId(selectedComplaint);
+    if (!rowId) return;
+    setIsSubmitting(true);
+    try {
+      await onUpdate(rowId, createFormData());
+      setShowEditModal(false);
+      setSelectedComplaint(null);
+      setFormData(emptyComplaint);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleCompleteClick = (complaint: CyberComplaint) => {
     setSelectedComplaint(complaint);
     setCloseNocFile(null);
-    setPendingAction("complete");
-    setShowPasswordModal(true);
+    setShowCloseModal(true);
   };
 
-  const handleDeleteClick = (complaint: CyberComplaint) => {
-    setSelectedComplaint(complaint);
-    setPendingAction("delete");
-    setShowPasswordModal(true);
+  const handleCloseSubmit = async () => {
+    if (!selectedComplaint) return;
+    const rowId = getRowId(selectedComplaint);
+    if (!rowId) return;
+    if (!closeNocFile) {
+      alert("Please select NOC file before closing.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await onMoveToClose(rowId, closeNocFile, formData.comment || null);
+      setShowCloseModal(false);
+      setSelectedComplaint(null);
+      setFormData(emptyComplaint);
+      setCloseNocFile(null);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteClick = async (complaint: CyberComplaint) => {
+    const rowId = getRowId(complaint);
+    if (!rowId || !confirm("Delete this complaint?")) return;
+    setIsSubmitting(true);
+    try {
+      await onDelete(rowId);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderFormFields = () => (
@@ -421,6 +417,9 @@ export function ActiveComplaints({
     "Police Station": c.police_station || "",
     "Vendor Name": c.vendor_name || "",
     "Comment": c.comment || "NULL",
+    "Entered By": c.entered_by_name || "",
+    "Edited By": c.edited_by_name || "",
+    "Closed By": c.closed_by_name || "",
     "NOC File": c.noc_file || "",
     "Created At": toIsoDate(c.created_at || null),
   }));
@@ -602,6 +601,7 @@ export function ActiveComplaints({
                     "State / District",
                     "Amount (TXN/DISP)",
                     "UTR / Station / Vendor",
+                    "Audit",
                     "NOC Status",
                     "Status",
                     "Manage",
@@ -630,6 +630,13 @@ export function ActiveComplaints({
                       <td className="px-4 py-4">
                         <p className="text-sm font-bold text-gray-800">{complaint.bank_name}</p>
                         <p className="text-[10px] text-gray-400 font-medium">LAYER: {complaint.layer}</p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-gray-700"><span className="text-gray-400">EN:</span> {complaint.entered_by_name || "-"}</p>
+                          <p className="text-[10px] text-gray-700"><span className="text-gray-400">ED:</span> {complaint.edited_by_name || "-"}</p>
+                          <p className="text-[10px] text-gray-700"><span className="text-gray-400">CL:</span> {complaint.closed_by_name || "-"}</p>
+                        </div>
                       </td>
                       <td className="px-4 py-4">
                         <p className="text-xs font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded w-fit">{complaint.ack_number}</p>
@@ -787,72 +794,26 @@ export function ActiveComplaints({
           </div>
         </DialogContent>
       </Dialog>
-
-      <Dialog open={showPasswordModal} onOpenChange={setShowPasswordModal}>
+      <Dialog open={showCloseModal} onOpenChange={setShowCloseModal}>
         <DialogContent className="max-w-sm bg-white border-0 shadow-2xl rounded-2xl p-0 overflow-hidden">
           <div className="bg-[#2c3e50] p-6 text-center">
-            <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/20">
-              <Lock className="w-8 h-8 text-white" />
-            </div>
-            <DialogTitle className="text-xl font-bold text-white mb-1">
-              Verify Action
-            </DialogTitle>
-            <DialogDescription className="text-white/60 text-xs font-medium">
-              Please enter your employee password to continue
-            </DialogDescription>
+            <DialogTitle className="text-xl font-bold text-white mb-1">Close Complaint</DialogTitle>
+            <DialogDescription className="text-white/60 text-xs font-medium">Upload NOC file to close this complaint.</DialogDescription>
           </div>
           <div className="p-6 space-y-4">
-            {pendingAction === "complete" && (
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-500 uppercase">NOC File *</label>
-                <Input
-                  type="file"
-                  onChange={(e) => setCloseNocFile(e.target.files?.[0] || null)}
-                  className="bg-gray-50 border-gray-200 text-gray-800 cursor-pointer"
-                  accept="*/*"
-                />
-                {closeNocFile && (
-                  <p className="text-[10px] text-green-600 font-bold flex items-center gap-1 mt-1">
-                    <FileCheck className="w-3 h-3" /> READY: {closeNocFile.name}
-                  </p>
-                )}
-              </div>
-            )}
-            <Input
-              id="pass-input"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="bg-gray-50 border-gray-200 text-gray-800 text-center text-lg h-12 focus:bg-white transition-all"
-              onKeyDown={(e) => e.key === "Enter" && handlePasswordSubmit()}
-              autoFocus
-            />
-            {passwordError && (
-              <p className="text-red-600 text-[10px] font-bold text-center animate-bounce uppercase tracking-wider">
-                <AlertCircle className="w-3 h-3 inline mr-1" /> {passwordError}
-              </p>
-            )}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase">NOC File *</label>
+              <Input type="file" onChange={(e) => setCloseNocFile(e.target.files?.[0] || null)} className="bg-gray-50 border-gray-200 text-gray-800 cursor-pointer" accept="*/*" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase">Comment (Optional)</label>
+              <Textarea value={formData.comment} onChange={(e) => handleInputChange("comment", e.target.value)} className="bg-gray-50 border-gray-200 text-gray-800 min-h-[80px]" />
+            </div>
             <div className="flex flex-col gap-2">
-              <Button
-                disabled={isSubmitting}
-                onClick={handlePasswordSubmit}
-                className="text-white font-black h-12 rounded-xl"
-                style={{ background: "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)" }}
-              >
-                {isSubmitting ? "AUTHORIZING..." : (pendingAction === "delete" ? "CONFIRM DELETE" : "CONFIRM ACTION")}
+              <Button disabled={isSubmitting || !closeNocFile} onClick={handleCloseSubmit} className="text-white font-black h-12 rounded-xl" style={{ background: "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)" }}>
+                {isSubmitting ? "CLOSING..." : "CLOSE COMPLAINT"}
               </Button>
-              <Button
-                variant="ghost"
-                disabled={isSubmitting}
-                onClick={() => {
-                  setShowPasswordModal(false);
-                  setPassword("");
-                  setPasswordError("");
-                  setCloseNocFile(null);
-                }}
-                className="text-gray-400 font-bold hover:text-gray-600"
-              >
+              <Button variant="ghost" disabled={isSubmitting} onClick={() => setShowCloseModal(false)} className="text-gray-400 font-bold hover:text-gray-600">
                 CANCEL
               </Button>
             </div>
@@ -862,3 +823,4 @@ export function ActiveComplaints({
     </div>
   );
 }
+

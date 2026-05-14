@@ -58,8 +58,9 @@ export function MasterPage({ onBack }: { onBack: () => void }) {
       setShowAddModal(false);
       setFormData({ full_name: "", phone_number: "", password: "", is_super_role: false });
       fetchEmployees();
-    } catch (error) {
-      toast.error("Failed to create employee");
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.message || "Failed to create employee";
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -77,8 +78,9 @@ export function MasterPage({ onBack }: { onBack: () => void }) {
       toast.success("Employee updated successfully");
       setShowEditModal(false);
       fetchEmployees();
-    } catch (error) {
-      toast.error("Failed to update employee");
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.message || "Failed to update employee";
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -90,8 +92,9 @@ export function MasterPage({ onBack }: { onBack: () => void }) {
       await apiService.deleteEmployee(id);
       toast.success("Employee deleted");
       fetchEmployees();
-    } catch (error) {
-      toast.error("Failed to delete employee");
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || error?.message || "Failed to delete employee";
+      toast.error(message);
     }
   };
 

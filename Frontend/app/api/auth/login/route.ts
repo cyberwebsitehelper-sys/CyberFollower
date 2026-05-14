@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/server/mongo";
-import { signAccessToken, verifyDjangoPassword } from "@/lib/server/auth";
+import { ensureDefaultHeadManager, signAccessToken, verifyDjangoPassword } from "@/lib/server/auth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ detail: "phone_number and password are required." }, { status: 400 });
     }
 
+    await ensureDefaultHeadManager();
     const db = await getDb();
     const user = await db.collection("core_employee").findOne({ phone_number: phone, is_active: { $ne: false } });
     if (!user || !verifyDjangoPassword(password, String(user.password || ""))) {
@@ -39,4 +40,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ detail: error?.message || "Login failed." }, { status: 500 });
   }
 }
-

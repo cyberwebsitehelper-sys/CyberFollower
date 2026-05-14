@@ -9,6 +9,7 @@ import { ClosedComplaints } from "@/components/closed-complaints";
 import { EmployeeData } from "@/components/employee-data";
 import { FeesManagement } from "@/components/fees-management";
 import { HistoryAnalytics } from "@/components/history-analytics";
+import { MasterPage } from "@/components/master-page";
 import { apiService } from "@/lib/api-service";
 import { initSessionFromStorage, setSessionTokens } from "@/lib/api-client";
 import { DataStoreProvider, useDataStore } from "@/lib/data-store";
@@ -106,9 +107,9 @@ function HomeContent() {
     }
   };
 
-  const handleMoveToClose = async (id: string, passwordConfirm: string, nocFile?: File | null, comment?: string | null) => {
+  const handleMoveToClose = async (id: string, nocFile?: File | null, comment?: string | null) => {
     try {
-      await closeComplaint(id, passwordConfirm, nocFile, comment);
+      await closeComplaint(id, nocFile, comment);
       toast.success(nocFile ? "NOC uploaded and complaint closed successfully" : "Complaint closed successfully");
     } catch (error: any) {
       const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error";
@@ -117,9 +118,9 @@ function HomeContent() {
     }
   };
 
-  const handleDeleteComplaint = async (id: string, passwordConfirm?: string) => {
+  const handleDeleteComplaint = async (id: string) => {
     try {
-      await deleteComplaint(id, passwordConfirm);
+      await deleteComplaint(id);
       toast.success("Complaint deleted");
     } catch (error: any) {
       const message = error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Unknown error";
@@ -168,6 +169,9 @@ function HomeContent() {
           <Dashboard
             onNavigate={handleNavigate}
             onLogout={handleLogout}
+            onOpenMaster={() => setCurrentView("master")}
+            onApiMaster={() => toast.info("Api Master page is not available yet.")}
+            onSettings={() => toast.info("Settings menu opened.")}
             onSearch={handleDashboardSearch}
             stats={{
               activeCount: activeComplaints.length,
@@ -214,6 +218,10 @@ function HomeContent() {
             cyberEntries={cyberEntries}
             onBack={() => setCurrentView("dashboard")}
           />
+        )}
+
+        {currentView === "master" && (
+          <MasterPage onBack={() => setCurrentView("dashboard")} />
         )}
       </motion.div>
     </AnimatePresence>

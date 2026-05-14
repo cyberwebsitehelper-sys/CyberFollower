@@ -30,6 +30,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         is_complete: true,
         completed_at: new Date(),
         comment: parseNullableString(form.get("comment")),
+        edited_by_name: user.full_name,
+        closed_by_name: user.full_name,
       },
     },
     { returnDocument: "after" }

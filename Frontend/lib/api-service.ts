@@ -21,6 +21,9 @@ export interface CyberComplaint {
   created_at: string;
   completed_at: string | null;
   employee: string;
+  entered_by_name?: string | null;
+  edited_by_name?: string | null;
+  closed_by_name?: string | null;
 }
 
 export interface AdvEntry {
@@ -171,13 +174,12 @@ export const apiService = {
   updateComplaint: (id: string, formData: FormData) => api.patch(`/api/complaints/${encodeEntityId(id)}/`, formData),
   uploadNoc: (id: string, formData: FormData) => api.post(`/api/complaints/${encodeEntityId(id)}/upload-noc/`, formData),
 
-  closeComplaint: (id: string, passwordConfirm: string, comment?: string | null) =>
+  closeComplaint: (id: string, comment?: string | null) =>
     api.post(`/api/complaints/${encodeEntityId(id)}/close/`, {
-      password_confirm: passwordConfirm,
       comment: comment ?? null,
     }),
 
-  deleteComplaint: (id: string, passwordConfirm?: string) => api.delete(`/api/complaints/${encodeEntityId(id)}/`, { password_confirm: passwordConfirm }),
+  deleteComplaint: (id: string) => api.delete(`/api/complaints/${encodeEntityId(id)}/`),
 
   getAdvEntries: (): Promise<AdvEntry[]> => api.get('/api/fees/adv/'),
 

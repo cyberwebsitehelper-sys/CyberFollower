@@ -31,6 +31,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     police_station: parseNullableString(form.get("police_station")),
     vendor_name: parseNullableString(form.get("vendor_name")),
     comment: parseNullableString(form.get("comment")),
+    edited_by_name: user.full_name,
   };
 
   const noc = form.get("noc_file");
@@ -39,6 +40,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     update.noc_file = uploaded.url;
     update.is_complete = true;
     update.completed_at = new Date();
+    update.closed_by_name = user.full_name;
   }
 
   const res = await db.collection("core_cybercomplaint").findOneAndUpdate(filter, { $set: update }, { returnDocument: "after" });

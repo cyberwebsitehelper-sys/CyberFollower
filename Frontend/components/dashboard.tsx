@@ -15,8 +15,10 @@ import {
   Wallet,
   TrendingUp,
   TrendingDown,
+  ChevronDown,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export type DashboardView =
   | "dashboard"
@@ -24,11 +26,15 @@ export type DashboardView =
   | "closed-complaints"
   | "employee-data"
   | "fees"
-  | "history";
+  | "history"
+  | "master";
 
 interface DashboardProps {
   onNavigate: (view: DashboardView) => void;
   onLogout: () => void;
+  onOpenMaster: () => void;
+  onApiMaster?: () => void;
+  onSettings?: () => void;
   onSearch?: (value: string) => void;
   stats: {
     activeCount: number;
@@ -38,7 +44,7 @@ interface DashboardProps {
   };
 }
 
-export function Dashboard({ onNavigate, onLogout, onSearch, stats }: DashboardProps) {
+export function Dashboard({ onNavigate, onLogout, onOpenMaster, onApiMaster, onSettings, onSearch, stats }: DashboardProps) {
   const handleSearch = (value: string) => {
     if (onSearch) onSearch(value);
   };
@@ -109,11 +115,17 @@ export function Dashboard({ onNavigate, onLogout, onSearch, stats }: DashboardPr
             <span className="text-xl font-bold">CYBER SYSTEM</span>
           </div>
           <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-6 text-sm">
-              <button className="hover:text-white/80 transition-colors">Master</button>
-              <button className="hover:text-white/80 transition-colors">Api Master</button>
-              <button className="hover:text-white/80 transition-colors">Settings</button>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-colors text-sm">
+                Settings <ChevronDown className="w-4 h-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onClick={onOpenMaster}>Master</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onApiMaster?.()}>Api Master</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onSettings?.()}>Settings</DropdownMenuItem>
+                <DropdownMenuItem onClick={onLogout}>Logout</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <button 
               onClick={onLogout}
               className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-colors"

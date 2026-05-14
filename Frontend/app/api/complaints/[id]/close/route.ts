@@ -13,7 +13,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const filter: any = parseIdFilter(id);
   if (!user.is_super_role) filter.employee_id = Number(user.id);
   await db.collection("core_cybercomplaint").updateOne(filter, {
-    $set: { is_complete: true, completed_at: new Date(), comment: rawComment || null },
+    $set: {
+      is_complete: true,
+      completed_at: new Date(),
+      comment: rawComment || null,
+      edited_by_name: user.full_name,
+      closed_by_name: user.full_name,
+    },
   });
   return NextResponse.json({ status: "complaint closed" });
 }

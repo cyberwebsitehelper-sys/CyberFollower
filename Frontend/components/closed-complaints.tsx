@@ -39,6 +39,9 @@ export function ClosedComplaints({ complaints, onBack }: ClosedComplaintsProps) 
       "Police Station": c.police_station || "",
       "Vendor Name": c.vendor_name || "",
       "Comment": c.comment || "NULL",
+      "Entered By": c.entered_by_name || "",
+      "Edited By": c.edited_by_name || "",
+      "Closed By": c.closed_by_name || "",
       "NOC File": c.noc_file || "",
       "Completed At": toIsoDate(c.completed_at),
     }));
@@ -347,6 +350,9 @@ export function ClosedComplaints({ complaints, onBack }: ClosedComplaintsProps) 
                     "Police Station",
                     "Vendor Name",
                     "Comment",
+                    "Entered By",
+                    "Edited By",
+                    "Closed By",
                     "NOC File",
                     "Completed At",
                   ].map((header) => (
@@ -408,6 +414,9 @@ export function ClosedComplaints({ complaints, onBack }: ClosedComplaintsProps) 
                       <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
                         {complaint.comment || "NULL"}
                       </td>
+                      <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">{complaint.entered_by_name || "-"}</td>
+                      <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">{complaint.edited_by_name || "-"}</td>
+                      <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">{complaint.closed_by_name || "-"}</td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
                         {complaint.noc_file && isOpenableFile(complaint.noc_file) ? (
                           <a

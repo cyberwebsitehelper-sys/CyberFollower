@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { NextRequest } from "next/server";
+import { getDb } from "@/lib/server/mongo";
 
 const JWT_SECRET = process.env.JWT_SECRET || process.env.SECRET_KEY || "dev-secret";
 
@@ -49,3 +50,43 @@ export function verifyDjangoPassword(rawPassword: string, encodedPassword: strin
   return crypto.timingSafeEqual(Buffer.from(derived), Buffer.from(hashB64));
 }
 
+export function hashDjangoPassword(rawPassword: string): string {
+  const iterations = 260000;
+  const salt = crypto.randomBytes(16).toString("hex");
+  const derived = crypto.pbkdf2Sync(rawPassword, salt, iterations, 32, "sha256").toString("base64");
+  return `pbkdf2_sha256$${iterations}$${salt}$${derived}`;
+}
+
+export async function ensureDefaultHeadManager() {
+  const db = await getDb();
+  const phone = "9876543210";
+  const existing = await db.collection("core_employee").findOne({ phone_number: phone });
+  if (existing) {
+    await db.collection("core_employee").updateOne(
+      { _id: existing._id },
+      {
+        $set: {
+          full_name: "Head Manager",
+          email: "9876543210@employee.local",
+          is_super_role: true,
+          is_active: true,
+          password: hashDjangoPassword(phone),
+        },
+      }
+    );
+    return;
+  }
+
+  const last = await db.collection("core_employee").find({}).sort({ id: -1 }).limit(1).toArray();
+  const nextId = Number(last?.[0]?.id || 0) + 1;
+  await db.collection("core_employee").insertOne({
+    id: nextId,
+    phone_number: phone,
+    email: "9876543210@employee.local",
+    full_name: "Head Manager",
+    password: hashDjangoPassword(phone),
+    is_super_role: true,
+    is_active: true,
+    created_at: new Date(),
+  });
+}

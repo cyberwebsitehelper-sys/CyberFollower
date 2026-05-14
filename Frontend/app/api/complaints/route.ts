@@ -61,6 +61,9 @@ export async function POST(request: NextRequest) {
     created_at: now,
     completed_at: nocPath ? now : null,
     employee_id: Number(user.id),
+    entered_by_name: user.full_name,
+    edited_by_name: user.full_name,
+    closed_by_name: nocPath ? user.full_name : null,
   };
 
   try {
