@@ -745,17 +745,28 @@ export function ActiveComplaints({
               <Button
                 variant="outline"
                 onClick={() => setShowAddModal(false)}
+                disabled={isSubmitting}
                 className="font-bold border-gray-200 px-6"
               >
                 Discard
               </Button>
               <Button
                 onClick={handleAddClick}
+                disabled={isSubmitting}
                 className="text-white font-bold px-8 shadow-md"
                 style={{ background: "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)" }}
               >
-                <Lock className="w-4 h-4 mr-2" />
-                Proceed to Submit
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-4 h-4 mr-2" />
+                    Proceed to Submit
+                  </>
+                )}
               </Button>
             </div>
           </div>
@@ -779,16 +790,27 @@ export function ActiveComplaints({
               <Button
                 variant="outline"
                 onClick={() => setShowEditModal(false)}
+                disabled={isSubmitting}
                 className="font-bold border-gray-200 px-6"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleEditSubmit}
+                disabled={isSubmitting}
                 className="text-white font-bold px-8 shadow-md bg-blue-600 hover:bg-blue-700"
               >
-                <Lock className="w-4 h-4 mr-2" />
-                Update Record
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-4 h-4 mr-2" />
+                    Update Record
+                  </>
+                )}
               </Button>
             </div>
           </div>
@@ -823,4 +845,3 @@ export function ActiveComplaints({
     </div>
   );
 }
-
