@@ -592,30 +592,27 @@ export function ActiveComplaints({
           className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden"
         >
           <div className="overflow-x-auto">
-            <table className="w-full text-left">
+            <table className="w-full text-left border-collapse">
               <thead className="bg-[#2c3e50] text-white">
                 <tr>
-                  {[
-                    "Client / Bank",
-                    "ACK / IFSC",
-                    "State / District",
-                    "Amount (TXN/DISP)",
-                    "UTR / Station / Vendor",
-                    "Audit",
-                    "NOC Status",
-                    "Status",
-                    "Manage",
-                  ].map((header) => (
-                    <th
-                      key={header}
-                      className="px-4 py-4 text-[10px] font-bold uppercase tracking-widest text-white/70"
-                    >
-                      {header}
-                    </th>
-                  ))}
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">Manage</th>
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">Bank Name</th>
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">ACK Number</th>
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">IFSC Code</th>
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">State</th>
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">District</th>
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">Layer</th>
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">TXN Amount</th>
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">Dispute Amount</th>
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">UTR Number</th>
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">Police Station</th>
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">Vendor Name</th>
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">Audit</th>
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">NOC Status</th>
+                  <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border border-gray-600 whitespace-nowrap text-white/80">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="bg-white">
                 <AnimatePresence mode="popLayout">
                   {filteredComplaints.map((complaint, index) => {
                     const rowId = getRowId(complaint);
@@ -625,91 +622,72 @@ export function ActiveComplaints({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      className="group hover:bg-gray-50/80 transition-all border-l-4 border-l-transparent hover:border-l-[#e74c3c]"
+                      className="group hover:bg-blue-50/50 transition-colors"
                     >
-                      <td className="px-4 py-4">
-                        <p className="text-sm font-bold text-gray-800">{complaint.bank_name}</p>
-                        <p className="text-[10px] text-gray-400 font-medium">LAYER: {complaint.layer}</p>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="space-y-1">
-                          <p className="text-[10px] text-gray-700"><span className="text-gray-400">EN:</span> {complaint.entered_by_name || "-"}</p>
-                          <p className="text-[10px] text-gray-700"><span className="text-gray-400">ED:</span> {complaint.edited_by_name || "-"}</p>
-                          <p className="text-[10px] text-gray-700"><span className="text-gray-400">CL:</span> {complaint.closed_by_name || "-"}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <p className="text-xs font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded w-fit">{complaint.ack_number}</p>
-                        <p className="text-[10px] text-gray-400 mt-1">{complaint.ifsc_code}</p>
-                      </td>
-                      <td className="px-4 py-4">
-                        <p className="text-xs text-gray-700 font-semibold">{complaint.state_name}</p>
-                        <p className="text-[10px] text-gray-400">{complaint.district}</p>
-                      </td>
-                      <td className="px-4 py-4">
-                        <p className="text-xs font-bold text-gray-800">₹{Number(complaint.txn_amount).toLocaleString()}</p>
-                        <p className="text-[10px] text-red-500 font-medium">₹{Number(complaint.dispute_amount).toLocaleString()}</p>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="space-y-1">
-                          <p className="text-[10px] text-gray-700 font-medium"><span className="text-gray-400">UTR:</span> {complaint.utr_number || "-"}</p>
-                          <p className="text-[10px] text-gray-700 font-medium"><span className="text-gray-400">PS:</span> {complaint.police_station || "-"}</p>
-                          <p className="text-[10px] text-gray-700 font-medium"><span className="text-gray-400">VN:</span> {complaint.vendor_name || "-"}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        {complaint.noc_file && isOpenableFile(complaint.noc_file) ? (
-                          <a
-                            href={complaint.noc_file}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full border border-green-200 hover:bg-green-100 transition-colors"
-                          >
-                            <FileCheck className="w-3 h-3" /> ATTACHED
-                          </a>
-                        ) : complaint.noc_file ? (
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-full border border-amber-200">
-                            <FileCheck className="w-3 h-3" /> LEGACY FILE PATH
-                          </div>
-                        ) : (
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 text-red-600 text-[10px] font-bold rounded-full border border-red-100">
-                            <FileX className="w-3 h-3" /> NO FILE
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold bg-yellow-50 text-yellow-700 border border-yellow-200">
-                          {complaint.is_complete ? "COMPLETE" : "ACTIVE"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <td className="px-2 py-2 border border-gray-200 whitespace-nowrap">
+                        <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleEditClick(complaint)}
                             disabled={complaint.is_complete}
-                            className="h-8 w-8 text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+                            className="h-6 w-6 text-gray-400 hover:text-blue-600 hover:bg-blue-50"
                           >
-                            <Edit className="w-4 h-4" />
+                            <Edit className="w-3 h-3" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleCompleteClick(complaint)}
-                            className="h-8 w-8 text-green-500 hover:bg-green-50"
+                            className="h-6 w-6 text-green-500 hover:bg-green-50"
                           >
-                            <Check className="w-4 h-4" />
+                            <Check className="w-3 h-3" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDeleteClick(complaint)}
-                            className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                            className="h-6 w-6 text-gray-400 hover:text-red-600 hover:bg-red-50"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3 h-3" />
                           </Button>
                         </div>
+                      </td>
+                      <td className="px-3 py-2 border border-gray-200 text-xs font-medium text-gray-800 whitespace-nowrap">{complaint.bank_name}</td>
+                      <td className="px-3 py-2 border border-gray-200 text-xs font-mono font-bold text-blue-700 whitespace-nowrap">{complaint.ack_number}</td>
+                      <td className="px-3 py-2 border border-gray-200 text-xs font-medium text-gray-800 whitespace-nowrap">{complaint.ifsc_code}</td>
+                      <td className="px-3 py-2 border border-gray-200 text-xs font-medium text-gray-800 whitespace-nowrap">{complaint.state_name}</td>
+                      <td className="px-3 py-2 border border-gray-200 text-xs font-medium text-gray-800 whitespace-nowrap">{complaint.district}</td>
+                      <td className="px-3 py-2 border border-gray-200 text-xs font-medium text-gray-800 whitespace-nowrap">{complaint.layer}</td>
+                      <td className="px-3 py-2 border border-gray-200 text-xs font-bold text-gray-800 whitespace-nowrap">₹{Number(complaint.txn_amount).toLocaleString()}</td>
+                      <td className="px-3 py-2 border border-gray-200 text-xs font-bold text-red-500 whitespace-nowrap">₹{Number(complaint.dispute_amount).toLocaleString()}</td>
+                      <td className="px-3 py-2 border border-gray-200 text-xs font-medium text-gray-800 whitespace-nowrap">{complaint.utr_number || "-"}</td>
+                      <td className="px-3 py-2 border border-gray-200 text-xs font-medium text-gray-800 whitespace-nowrap">{complaint.police_station || "-"}</td>
+                      <td className="px-3 py-2 border border-gray-200 text-xs font-medium text-gray-800 whitespace-nowrap">{complaint.vendor_name || "-"}</td>
+                      <td className="px-3 py-2 border border-gray-200 text-[10px] text-gray-600 whitespace-nowrap">
+                        <span className="font-semibold text-gray-400">EN:</span> {complaint.entered_by_name || "-"}<br/>
+                        <span className="font-semibold text-gray-400">ED:</span> {complaint.edited_by_name || "-"}<br/>
+                        <span className="font-semibold text-gray-400">CL:</span> {complaint.closed_by_name || "-"}
+                      </td>
+                      <td className="px-3 py-2 border border-gray-200 whitespace-nowrap">
+                        {complaint.noc_file && isOpenableFile(complaint.noc_file) ? (
+                          <a href={complaint.noc_file} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-green-700 text-[10px] font-bold hover:underline">
+                            <FileCheck className="w-3 h-3" /> ATTACHED
+                          </a>
+                        ) : complaint.noc_file ? (
+                          <span className="inline-flex items-center gap-1 text-amber-700 text-[10px] font-bold">
+                            <FileCheck className="w-3 h-3" /> LEGACY FILE PATH
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-red-600 text-[10px] font-bold">
+                            <FileX className="w-3 h-3" /> NO FILE
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 border border-gray-200 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${complaint.is_complete ? "bg-green-50 text-green-700" : "bg-yellow-50 text-yellow-700"}`}>
+                          {complaint.is_complete ? "COMPLETE" : "ACTIVE"}
+                        </span>
                       </td>
                     </motion.tr>
                     );
